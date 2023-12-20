@@ -1,0 +1,24 @@
+{
+  "cSpell.words": [
+    "backtest",
+    "Backtesting",
+    "Datelike",
+    "dtype",
+    "gdrive",
+    "gmocoin",
+    "HMAC",
+    "idtoken",
+    "klines",
+    "mailaddress",
+    "ohlcs",
+    "refreshtoken",
+    "responsetime",
+    "rusqlite",
+    "testrun",
+    "topix",
+    "xlabel",
+    "xticks",
+    "ylabel"
+  ],
+  "python.defaultInterpreterPath": "/Users/shinjiroaso/dev/trading23/backtesting/.venv/bin/python3.11"
+}

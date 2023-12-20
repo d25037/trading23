@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "trading23-backtest-py"
+version = "0.1.0"
+description = ""
+authors = ["d25037 <d25037@gmail.com>"]
+readme = "README.md"
+packages = [{include = "trading23_backtest_py"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.1.4"
+matplotlib = "^3.8.2"
+numpy = "^1.26.2"
+polars = "^0.20.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pandas-stubs = "^2.1.1.230928"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
