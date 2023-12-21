@@ -88,6 +88,18 @@ pub fn get_backtest_json_file_path(ohlc_type: AssetType) -> Result<PathBuf, MyEr
     }
 }
 
+pub fn io_testrun(analyzed_at: &str) -> Result<(), MyError>{
+    let now = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
+    let file_name = format!("{}_{}", analyzed_at, now);
+    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let file = Path::new(&gdrive_path)
+        .join("trading23")
+        .join(file_name);
+
+    std::fs::write(file, "testrun").unwrap();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

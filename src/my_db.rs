@@ -1,14 +1,10 @@
-use crate::analysis::live::{LongOrShort, OhlcAnalyzer};
+use crate::analysis::live::OhlcAnalyzer;
 use anyhow::Result;
 use chrono::{Local, TimeZone};
 use log::info;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::{
-    env,
-    fmt::{Display, Formatter, Write},
-    path::Path,
-};
+use std::{env, fmt::Write, path::Path};
 
 pub fn open_db() -> Result<Connection> {
     let gdrive_path = env::var("GDRIVE_PATH").unwrap();
@@ -53,11 +49,11 @@ impl NewStock {
         }
     }
 
-    pub fn insert_record(self, conn: &Connection) {
-        let last20_analysis = self.ohlc_analyzer.analyze_last20();
-        // if !last20_analysis.get_break_or_not() {
-        //     return;
-        // }
+    pub fn insert_record(self, conn: &Connection, unit: f64) {
+        let last20_analysis = self.ohlc_analyzer.analyze_last20(Some(unit));
+        if !last20_analysis.get_break_or_not() {
+            return;
+        }
 
         let created_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -94,7 +90,7 @@ pub struct Stock {
     code: i32,
     name: String,
     break_or_not: String,
-    long_or_short: Option<String>,
+    long_or_short: String,
     stop_loss_order: Option<f64>,
     units: Option<i32>,
     daily_diff: Option<f64>,
@@ -105,69 +101,32 @@ pub struct Stock {
 }
 
 impl Stock {
-    fn get_long_or_short(&self) -> String {
-        match &self.long_or_short {
-            Some(long_or_short) => long_or_short.to_string(),
-            None => "None".to_string(),
-        }
+    fn get_long_or_short(&self) -> &str {
+        &self.long_or_short.as_ref()
     }
-    fn to_line_notify(&self, mut buffer: String) -> String {
-        // match self.long_or_short.as_ref().unwrap().as_str() {
-        //     "Long" => {
-        //         if self.daily_diff.unwrap() > 0.09 {
-        //             // if self.daily_diff.unwrap() < 0.085 || self.daily_diff.unwrap() > 0.12 {
-        //             return buffer;
-        //         }
-        //     }
-        //     "Short" => {
-        //         if self.daily_diff.unwrap() > 0.09 {
-        //             return buffer;
-        //         }
-        //     }
-        //     _ => return buffer,
-        // }
-
+    fn output_stock_data(&self, mut buffer: String) -> String {
         let required_amount = self.stop_loss_order.unwrap() * self.units.unwrap() as f64;
         let required_amount_rounded: i32 = (required_amount * 10.0).round() as i32 / 10;
+
+        let stop_loss_order_rounded: i32 = self.stop_loss_order.unwrap().round() as i32;
+        let stop_loss_order_str = stop_loss_order_rounded.to_string() + "円";
 
         writeln!(buffer).unwrap();
         writeln!(
             buffer,
-            "{} {} {} {} {} {} {} {} {} {}円",
+            "{} {} {} {} {} {} {} {}円",
             self.code,
             self.name,
-            self.long_or_short.as_ref().unwrap(),
-            self.stop_loss_order.as_ref().unwrap(),
+            stop_loss_order_str,
             self.units.unwrap(),
             self.daily_diff.unwrap(),
             self.monthly_diff.unwrap(),
             self.monthly_trend.as_ref().unwrap(),
-            self.analyzed_at,
-            // self.created_at
             required_amount_rounded
         )
         .unwrap();
 
         buffer
-    }
-}
-
-impl Display for Stock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "{} {} {} {} {} {} {} {} {} {}",
-            self.code,
-            self.name,
-            self.long_or_short.as_ref().unwrap(),
-            self.stop_loss_order.as_ref().unwrap(),
-            self.units.unwrap(),
-            self.daily_diff.unwrap(),
-            self.monthly_diff.unwrap(),
-            self.monthly_trend.as_ref().unwrap(),
-            self.analyzed_at,
-            self.created_at
-        )
     }
 }
 
@@ -180,92 +139,89 @@ impl StockList {
     fn count_long_stocks(&self) -> usize {
         self.stocks
             .iter()
-            .filter(|stock| stock.long_or_short.as_ref().unwrap() == "Long")
+            .filter(|stock| stock.long_or_short == "Long")
             .count()
     }
 
     fn count_short_stocks(&self) -> usize {
         self.stocks
             .iter()
-            .filter(|stock| stock.long_or_short.as_ref().unwrap() == "Short")
+            .filter(|stock| stock.long_or_short == "Short")
             .count()
     }
 
-    fn determine_entry_long_or_short(&self) -> EntryLongOrShort {
+    fn determine_entry_long_or_short(&self, date: &str) -> EntryLongOrShort {
         let long = self.count_long_stocks();
         let short = self.count_short_stocks();
 
-        let diff = long as i32 - short as i32;
-        match diff {
-            diff if diff > 0 => EntryLongOrShort {
-                long_or_short: Some(LongOrShort::Long),
-                long_count: long,
-                short_count: short,
-                diff,
-            },
-            diff if diff < 0 => EntryLongOrShort {
-                long_or_short: Some(LongOrShort::Short),
-                long_count: long,
-                short_count: short,
-                diff,
-            },
-            _ => EntryLongOrShort {
-                long_or_short: None,
-                long_count: long,
-                short_count: short,
-                diff,
-            },
-        }
+        EntryLongOrShort::new(date, long, short)
     }
 
-    fn write_stocks_list(&self, mut buffer: String) -> String {
-        let entry_long_of_short = self.determine_entry_long_or_short();
+    fn output_stocks_list(&self, date: &str) -> Output {
+        let entry_long_or_short = self.determine_entry_long_or_short(date);
 
-        match entry_long_of_short.get_long_or_short().as_str() {
-            "None" => (),
-            x => {
-                for stock in self.stocks.iter() {
-                    if stock.get_long_or_short() == x {
-                        buffer = stock.to_line_notify(buffer);
-                    }
-                }
+        let mut long_stocks = String::new();
+        writeln!(long_stocks, "Long").unwrap();
+        let mut short_stocks = String::new();
+        writeln!(short_stocks, "Short").unwrap();
+
+        for stock in self.stocks.iter() {
+            match stock.get_long_or_short() {
+                "Long" => long_stocks = stock.output_stock_data(long_stocks),
+                "Short" => short_stocks = stock.output_stock_data(short_stocks),
+                _ => (),
             }
         }
 
-        writeln!(
+        Output {
+            entry_long_or_short,
+            long_stocks,
+            short_stocks,
+        }
+    }
+}
+
+struct EntryLongOrShort {
+    date: String,
+    long_count: usize,
+    short_count: usize,
+}
+impl EntryLongOrShort {
+    fn new(date: &str, long_count: usize, short_count: usize) -> Self {
+        Self {
+            date: date.to_string(),
+            long_count,
+            short_count,
+        }
+    }
+    fn output_entry_long_or_short(&self) -> String {
+        let mut buffer = String::new();
+        writeln!(buffer).unwrap();
+        write!(
             buffer,
-            "long: {}, short: {}, diff: {}",
-            entry_long_of_short.get_long_count(),
-            entry_long_of_short.get_short_count(),
-            entry_long_of_short.get_diff()
+            "Date: {}, Long: {}, Short: {}",
+            self.date, self.long_count, self.short_count
         )
         .unwrap();
         buffer
     }
 }
 
-struct EntryLongOrShort {
-    long_or_short: Option<LongOrShort>,
-    long_count: usize,
-    short_count: usize,
-    diff: i32,
+pub struct Output {
+    entry_long_or_short: EntryLongOrShort,
+    long_stocks: String,
+    short_stocks: String,
 }
-impl EntryLongOrShort {
-    //getters
-    fn get_long_or_short(&self) -> String {
-        match &self.long_or_short {
-            Some(long_or_short) => long_or_short.to_string(),
-            None => "None".to_string(),
-        }
+impl Output {
+    // getters
+    pub fn get_entry_long_or_short(&self) -> String {
+        self.entry_long_or_short.output_entry_long_or_short()
     }
-    fn get_long_count(&self) -> usize {
-        self.long_count
+    pub fn get_long_stocks(&self) -> &str {
+        &self.long_stocks
     }
-    fn get_short_count(&self) -> usize {
-        self.short_count
-    }
-    fn get_diff(&self) -> i32 {
-        self.diff
+    pub fn get_short_stocks(&self) -> &str {
+        &self.short_stocks
     }
 }
 
@@ -291,7 +247,7 @@ impl SelectDate {
     }
 }
 
-pub fn select_stocks(conn: &Connection, date_str: Option<SelectDate>) -> String {
+pub fn select_stocks(conn: &Connection, date_str: Option<SelectDate>) -> Output {
     let date_str = match date_str {
         Some(date_str) => {
             let dt = Local
@@ -310,11 +266,11 @@ pub fn select_stocks(conn: &Connection, date_str: Option<SelectDate>) -> String 
     };
     let mut stmt = conn
         .prepare(
-            "SELECT * FROM stocks WHERE analyzed_at=?1 AND break_or_not='true' ORDER BY daily_diff",
+            "SELECT * FROM stocks WHERE analyzed_at=?1 AND break_or_not='true' ORDER BY long_or_short, daily_diff",
         )
         .unwrap();
     let stock_iter = stmt
-        .query_map([date_str], |row| {
+        .query_map([date_str.clone()], |row| {
             Ok(Stock {
                 id: row.get(0)?,
                 code: row.get(1)?,
@@ -336,13 +292,46 @@ pub fn select_stocks(conn: &Connection, date_str: Option<SelectDate>) -> String 
     let stock_list = StockList {
         stocks: stock_list.unwrap(),
     };
-    let mut buffer = String::new();
+    let output = stock_list.output_stocks_list(&date_str);
+    info!("{}", output.get_entry_long_or_short());
+    info!("{}", output.get_long_stocks());
+    info!("{}", output.get_short_stocks());
 
-    buffer = stock_list.write_stocks_list(buffer);
-    info!("{}", buffer);
-
-    buffer
+    output
 }
+
+// pub fn select_stocks_manually(conn: &Connection, sql: &str) -> Output {
+//     let mut stmt = conn.prepare(sql).unwrap();
+//     let stock_iter = stmt
+//         .query_map([], |row| {
+//             Ok(Stock {
+//                 id: row.get(0)?,
+//                 code: row.get(1)?,
+//                 name: row.get(2)?,
+//                 break_or_not: row.get(3)?,
+//                 long_or_short: row.get(4)?,
+//                 stop_loss_order: row.get(5)?,
+//                 units: row.get(6)?,
+//                 daily_diff: row.get(7)?,
+//                 monthly_diff: row.get(8)?,
+//                 monthly_trend: row.get(9)?,
+//                 analyzed_at: row.get(10)?,
+//                 created_at: row.get(11)?,
+//             })
+//         })
+//         .unwrap();
+
+//     let stock_list: Result<Vec<Stock>, rusqlite::Error> = stock_iter.collect();
+//     let stock_list = StockList {
+//         stocks: stock_list.unwrap(),
+//     };
+//     let output = stock_list.output_stocks_list(&date);
+//     info!("{}", output.get_entry_long_or_short());
+//     info!("{}", output.get_long_stocks());
+//     info!("{}", output.get_short_stocks());
+
+//     output
+// }
 
 #[cfg(test)]
 mod test {

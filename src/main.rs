@@ -11,6 +11,7 @@ mod line_notify;
 mod my_db;
 mod my_error;
 mod my_file_io;
+mod notion;
 
 #[derive(Parser)]
 pub struct Cli {
@@ -25,8 +26,15 @@ enum Commands {
     /// date: YYYYMMDD
     Db {
         #[arg(short, long)]
+        testrun: bool,
+        #[arg(short, long)]
         date: String,
+        #[arg(short, long)]
+        notify: bool,
+        #[arg(short, long)]
+        sql: Option<String>,
     },
+    Notion,
 }
 
 #[derive(Args)]
@@ -60,8 +68,8 @@ async fn main() {
                     };
 
                     let conn = my_db::open_db().unwrap();
-                    let body = my_db::select_stocks(&conn, None);
-                    line_notify::send_message(&body).await;
+                    let output = my_db::select_stocks(&conn, None);
+                    line_notify::send_message_from_jquants_output(output).await;
                 }
 
                 // backtesting
@@ -78,10 +86,12 @@ async fn main() {
                 // testrun
                 (false, true) => {
                     let code = args.code.unwrap_or(7203);
-                    jquants::live::fetch_ohlc_once(code).await.unwrap();
+                    let last_date = jquants::live::fetch_ohlc_once(code).await.unwrap();
+
+                    my_file_io::io_testrun(&last_date).unwrap();
                 }
                 _ => {}
-            };
+            }
         }
         Commands::Fx(args) => {
             match (args.backtest, args.testrun) {
@@ -95,15 +105,42 @@ async fn main() {
                     gmo_coin::backtesting::backtesting_to_json().unwrap();
                 }
                 _ => {}
-            };
+            }
         }
-        Commands::Db { date } => {
-            let year = date[0..4].parse().unwrap();
-            let month = date[4..6].parse().unwrap();
-            let day = date[6..8].parse().unwrap();
+        Commands::Db {
+            testrun,
+            date,
+            sql,
+            notify,
+        } => match testrun {
+            false => {
+                let year = date[0..4].parse().unwrap();
+                let month = date[4..6].parse().unwrap();
+                let day = date[6..8].parse().unwrap();
 
-            let conn = my_db::open_db().unwrap();
-            my_db::select_stocks(&conn, Some(SelectDate::new(year, month, day)));
+                let conn = my_db::open_db().unwrap();
+                let output = my_db::select_stocks(&conn, Some(SelectDate::new(year, month, day)));
+                if *notify {
+                    line_notify::send_message_from_jquants_output(output).await;
+                }
+            }
+
+            true => {
+                // let conn = my_db::open_db().unwrap();
+                match sql {
+                    Some(sql) => {
+                        info!("sql: {}", sql);
+                        // my_db::select_stocks_manually(&conn, sql);
+                    }
+                    None => {
+                        info!("sql statement is required")
+                    }
+                }
+            }
+        },
+        Commands::Notion => {
+            info!("notion");
+            notion::get_notion_data().await.unwrap();
         }
     }
 }

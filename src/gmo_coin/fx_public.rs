@@ -322,7 +322,7 @@ pub async fn fetch_gmo_coin_fx() {
 
         match ohlc_analyzer.get_position() {
             Some(_) => info!("stop loss order: {:?}", ohlc_analyzer.position_follow()),
-            None => info!("{:?}", ohlc_analyzer.analyze_last20()),
+            None => info!("{:?}", ohlc_analyzer.analyze_last20(None)),
         }
     }
 }

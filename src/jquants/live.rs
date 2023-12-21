@@ -45,14 +45,6 @@ async fn fetch_refresh_token(client: &Client) -> Result<(), MyError> {
             config.set_jquants_refresh_token(refresh_token.refresh_token);
             config.write_to_file();
             info!("Overwrite the jquantsRefreshToken in the .env file");
-            // overwrite_dot_env("JQUANTS_REFRESH_TOKEN", &refresh_token.refresh_token);
-            // info!("Overwrite the JQUANTS_REFRESH_TOKEN in the .env file");
-            // let env_cloud_path = {
-            //     let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
-            //     Path::new(&gdrive_path).join("trading23").join(".env_cloud")
-            // };
-            // dotenvy::from_path_override(env_cloud_path).unwrap();
-            // info!("Overwrite the JQUANTS_REFRESH_TOKEN in the environment variable");
             Ok(())
         }
         _ => Err(MyError::Anyhow(anyhow!(
@@ -82,14 +74,6 @@ async fn fetch_id_token(client: &Client) -> Result<(), MyError> {
             config.set_jquants_id_token(id_token.id_token);
             config.write_to_file();
             info!("Overwrite the jquantsIdToken in the config.json file");
-            // overwrite_dot_env("JQUANTS_ID_TOKEN", &id_token.id_token);
-            // info!("Overwrite the JQUANTS_ID_TOKEN in the .env file");
-            // let env_cloud_path = {
-            //     let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
-            //     Path::new(&gdrive_path).join("trading23").join(".env_cloud")
-            // };
-            // dotenvy::from_path_override(env_cloud_path).unwrap();
-            // info!("Overwrite the JQUANTS_ID_TOKEN in the environment variable");
             Ok(())
         }
         StatusCode::BAD_REQUEST => {
@@ -146,7 +130,6 @@ async fn fetch_listed_info(client: &Client, code: i32) -> Result<(), MyError> {
 }
 
 async fn fetch_topix(client: &Client) -> Result<(), MyError> {
-    // let id_token = env::var("JQUANTS_ID_TOKEN").unwrap();
     let config = crate::config::GdriveJson::new();
     let id_token = config.jquants_id_token();
     let base_url = "https://api.jquants.com/v1/indices/topix";
@@ -155,7 +138,6 @@ async fn fetch_topix(client: &Client) -> Result<(), MyError> {
     let yesterday = now - chrono::Duration::days(7);
     let yesterday_string = yesterday.format("%Y-%m-%d").to_string();
 
-    // let url = base_url.to_string() + "?from=" + &yesterday_string + "&to=" + &now_string;
     let query = json!({"from": yesterday_string, "to": now_string});
 
     info!("Fetch Topix");
@@ -187,7 +169,6 @@ async fn fetch_topix(client: &Client) -> Result<(), MyError> {
 }
 
 pub async fn fetch_ohlc(client: &Client, code: i32) -> Result<String, MyError> {
-    // let id_token = env::var("JQUANTS_ID_TOKEN").unwrap();
     let config = crate::config::GdriveJson::new();
     let id_token = config.jquants_id_token();
     let url = "https://api.jquants.com/v1/prices/daily_quotes";
@@ -323,10 +304,14 @@ pub async fn fetch_nikkei225() -> Result<(), MyError> {
     };
     info!("Nikkei225 has been loaded");
 
+    let config = crate::config::GdriveJson::new();
+    let unit = config.jquants_unit();
+    info!("unit: {}", unit);
+
     info!("Starting Fetch Nikkei225");
 
     for row in nikkei225 {
-        thread::sleep(Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(2));
 
         let code = row.get_code();
         let name = row.get_name();
@@ -347,12 +332,12 @@ pub async fn fetch_nikkei225() -> Result<(), MyError> {
 
         let conn = crate::my_db::open_db().unwrap();
         let new_stock = crate::my_db::NewStock::new(code, name, ohlc_analyzer);
-        new_stock.insert_record(&conn);
+        new_stock.insert_record(&conn, unit);
     }
     Ok(())
 }
 
-pub async fn fetch_ohlc_once(code: i32) -> Result<(), MyError> {
+pub async fn fetch_ohlc_once(code: i32) -> Result<String, MyError> {
     info!("Starting Ohlc Fetch once");
     let client = Client::new();
     if let Err(e) = first_fetch(&client).await {
@@ -372,7 +357,9 @@ pub async fn fetch_ohlc_once(code: i32) -> Result<(), MyError> {
     };
 
     let raw_ohlc: Vec<Ohlc> = daily_quotes.get_ohlc();
-    info!("last_date: {}", raw_ohlc.last().unwrap().get_date());
+    let last_data = raw_ohlc.last().unwrap();
+    let last_date = last_data.get_date().to_string();
+    info!("last_data: {:?}", last_data);
     let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
 
     ohlc_analyzer.get_shorter_chart();
@@ -381,7 +368,7 @@ pub async fn fetch_ohlc_once(code: i32) -> Result<(), MyError> {
         ohlc_analyzer.get_shorter_ohlc_standardized_diff()
     );
 
-    Ok(())
+    Ok(last_date)
 }
 
 // #[cfg(test)]

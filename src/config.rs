@@ -12,6 +12,8 @@ pub struct GdriveJson {
     jquants_refresh_token: String,
     #[serde(rename = "jquantsIdToken")]
     jquants_id_token: String,
+    #[serde(rename = "jquantsUnit")]
+    jquants_unit: String,
     #[serde(rename = "lineToken")]
     line_token: String,
     #[serde(rename = "gmoCoinFxApiKey")]
@@ -56,6 +58,9 @@ impl GdriveJson {
     }
     pub fn jquants_pw(&self) -> &str {
         &self.jquants_pw
+    }
+    pub fn jquants_unit(&self) -> f64 {
+        self.jquants_unit.parse::<f64>().unwrap()
     }
     pub fn line_token(&self) -> &str {
         &self.line_token

@@ -86,7 +86,7 @@ pub struct OhlcAnalyzer {
 
 impl OhlcAnalyzer {
     pub fn from_jquants(raw_ohlc: Vec<Ohlc>) -> Self {
-        let shorter_ohlc = to_daily_ohlc_with_closing_window(raw_ohlc.clone());
+        let shorter_ohlc = raw_ohlc.clone().into_iter().rev().take(60).rev().collect();
         let longer_ohlc = to_monthly_ohlc(raw_ohlc.clone());
         Self {
             source: OhlcSource::Jquants,
@@ -116,7 +116,7 @@ impl OhlcAnalyzer {
         &self.position
     }
 
-    pub fn analyze_last20(&self) -> Last20Analysis {
+    pub fn analyze_last20(&self, jquants_unit: Option<f64>) -> Last20Analysis {
         let last_20: Vec<Ohlc> = self
             .shorter_ohlc
             .clone()
@@ -150,8 +150,11 @@ impl OhlcAnalyzer {
                         (stop_loss_order_naked * coefficient).round() / coefficient
                     }
                 };
+
                 let units = match &self.source {
-                    OhlcSource::Jquants => (20000.0 / (last[0].close - stop_loss_order)) as i32,
+                    OhlcSource::Jquants => {
+                        (jquants_unit.unwrap() / (last[0].close - stop_loss_order)) as i32
+                    }
                     OhlcSource::GmoCoinFx(symbol) => {
                         let coefficient = match symbol {
                             Symbol::EurUsd | Symbol::GbpUsd | Symbol::AudUsd => 0.01,
@@ -189,7 +192,9 @@ impl OhlcAnalyzer {
                     }
                 };
                 let units = match &self.source {
-                    OhlcSource::Jquants => (20000.0 / (stop_loss_order - last[0].close)) as i32,
+                    OhlcSource::Jquants => {
+                        (jquants_unit.unwrap() / (stop_loss_order - last[0].close)) as i32
+                    }
                     OhlcSource::GmoCoinFx(symbol) => {
                         let coefficient = match symbol {
                             Symbol::EurUsd | Symbol::GbpUsd | Symbol::AudUsd => 0.01,
@@ -348,11 +353,6 @@ impl OhlcAnalyzer {
     }
 }
 
-fn to_daily_ohlc_with_closing_window(ohlc_vec: Vec<Ohlc>) -> Vec<Ohlc> {
-    let shorter_ohlc = ohlc_vec.clone().into_iter().rev().take(60).rev().collect();
-    close_the_window(shorter_ohlc)
-}
-
 fn to_monthly_ohlc(ohlc_vec: Vec<Ohlc>) -> Vec<Ohlc> {
     let mut monthly_ohlc_map: HashMap<String, Vec<Ohlc>> = HashMap::new();
 
@@ -425,13 +425,6 @@ impl Last20Analysis {
     pub fn get_analyzed_at(&self) -> &str {
         self.analyzed_at.as_str()
     }
-}
-
-fn close_the_window(mut ohlc_vec: Vec<Ohlc>) -> Vec<Ohlc> {
-    for i in 0..ohlc_vec.len() - 1 {
-        ohlc_vec[i + 1].open = ohlc_vec[i].close;
-    }
-    ohlc_vec
 }
 
 #[allow(dead_code)]
