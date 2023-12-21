@@ -197,10 +197,11 @@ impl EntryLongOrShort {
     fn output_entry_long_or_short(&self) -> String {
         let mut buffer = String::new();
         writeln!(buffer).unwrap();
+        writeln!(buffer, "Date: {}", self.date).unwrap();
         write!(
             buffer,
-            "Date: {}, Long: {}, Short: {}",
-            self.date, self.long_count, self.short_count
+            "Long: {}, Short: {}",
+            self.long_count, self.short_count
         )
         .unwrap();
         buffer
