@@ -102,7 +102,7 @@ pub struct Stock {
 
 impl Stock {
     fn get_long_or_short(&self) -> &str {
-        &self.long_or_short.as_ref()
+        self.long_or_short.as_ref()
     }
     fn output_stock_data(&self, mut buffer: String) -> String {
         let required_amount = self.stop_loss_order.unwrap() * self.units.unwrap() as f64;

@@ -6,6 +6,8 @@ pub enum MyError {
     RefreshTokenExpired,
     #[error("It is holiday")]
     Holiday,
+    #[error("Not Latest Data")]
+    NotLatestData,
     #[error("out of range for slice of length")]
     OutOfRange,
     #[error(transparent)]

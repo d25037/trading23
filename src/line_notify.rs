@@ -33,7 +33,7 @@ async fn send_message(message: &str) {
 pub async fn send_message_from_jquants_output(output: Output) {
     send_message(&output.get_entry_long_or_short()).await;
     thread::sleep(Duration::from_secs(2));
-    send_message(&output.get_long_stocks()).await;
+    send_message(output.get_long_stocks()).await;
     thread::sleep(Duration::from_secs(2));
-    send_message(&output.get_short_stocks()).await;
+    send_message(output.get_short_stocks()).await;
 }

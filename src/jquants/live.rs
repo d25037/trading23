@@ -286,7 +286,7 @@ pub async fn first_fetch(client: &Client) -> Result<(), MyError> {
     }
 }
 
-pub async fn fetch_nikkei225() -> Result<(), MyError> {
+pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
     let client = Client::new();
 
     info!("Starting First Fetch");
@@ -328,6 +328,13 @@ pub async fn fetch_nikkei225() -> Result<(), MyError> {
         };
 
         let raw_ohlc: Vec<Ohlc> = daily_quotes.get_ohlc();
+        let now = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let last_date = raw_ohlc.last().unwrap().get_date().to_string();
+        if now != last_date && !force {
+            error!("Not Latest Data");
+            return Err(MyError::NotLatestData);
+        }
+
         let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
 
         let conn = crate::my_db::open_db().unwrap();

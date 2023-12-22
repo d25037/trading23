@@ -47,6 +47,8 @@ struct MyArgs {
     testrun: bool,
     #[arg(short, long, default_value = "7203")]
     code: Option<i32>,
+    #[arg(short, long)]
+    force: bool,
 }
 
 #[tokio::main]
@@ -62,9 +64,12 @@ async fn main() {
             match (args.backtest, args.testrun) {
                 // live
                 (false, false) => {
-                    match jquants::live::fetch_nikkei225().await {
+                    match jquants::live::fetch_nikkei225(args.force).await {
                         Ok(_) => info!("fetch_nikkei225 success"),
-                        Err(e) => return error!("fetch_nikkei225 failed: {}", e),
+                        Err(e) => match e {
+                            my_error::MyError::NotLatestData => return error!("{}", e),
+                            _ => return error!("fetch_nikkei225 failed: {}", e),
+                        },
                     };
 
                     let conn = my_db::open_db().unwrap();
