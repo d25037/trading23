@@ -25,13 +25,13 @@ enum Commands {
     Fx(MyArgs),
     /// date: YYYYMMDD
     Db {
-        #[arg(short, long)]
+        #[arg(long)]
         testrun: bool,
-        #[arg(short, long)]
+        #[arg(long)]
         date: String,
-        #[arg(short, long)]
+        #[arg(long)]
         notify: bool,
-        #[arg(short, long)]
+        #[arg(long)]
         sql: Option<String>,
     },
     Notion,
@@ -39,15 +39,15 @@ enum Commands {
 
 #[derive(Args)]
 struct MyArgs {
-    #[arg(short, long)]
+    #[arg(long)]
     backtest: bool,
-    #[arg(short, long)]
+    #[arg(long)]
     fetch: bool,
-    #[arg(short, long)]
+    #[arg(long)]
     testrun: bool,
-    #[arg(short, long, default_value = "7203")]
+    #[arg(long, default_value = "7203")]
     code: Option<i32>,
-    #[arg(short, long)]
+    #[arg(long)]
     force: bool,
 }
 
