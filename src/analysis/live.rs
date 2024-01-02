@@ -43,17 +43,6 @@ impl Ohlc {
     pub fn get_close(&self) -> f64 {
         self.close
     }
-
-    //setters
-    pub fn set_open(&mut self, open: f64) {
-        self.open = open;
-    }
-    pub fn set_high(&mut self, high: f64) {
-        self.high = high;
-    }
-    pub fn set_low(&mut self, low: f64) {
-        self.low = low;
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug)]

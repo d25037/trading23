@@ -1,4 +1,4 @@
-use super::live::{fetch_ohlc, first_fetch, DailyQuotes};
+use super::live::{fetch_daily_quotes, first_fetch, DailyQuotes};
 use crate::analysis::backtesting::BacktestAnalyzer;
 use crate::analysis::live::Ohlc;
 use crate::my_error::MyError;
@@ -15,7 +15,8 @@ pub async fn fetch_ohlcs_and_save() -> Result<(), MyError> {
     let client = Client::new();
 
     info!("Starting First Fetch");
-    if let Err(e) = first_fetch(&client).await {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    if let Err(e) = first_fetch(&client, Some(&today)).await {
         error!("{}", e);
         return Err(e);
     }
@@ -36,7 +37,7 @@ pub async fn fetch_ohlcs_and_save() -> Result<(), MyError> {
 
         let code = row.get_code();
 
-        let daily_quotes: DailyQuotes = match fetch_ohlc(&client, code).await {
+        let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
             Ok(res) => {
                 // debug!("{:?}", res);
                 serde_json::from_str(&res).unwrap()
@@ -48,7 +49,7 @@ pub async fn fetch_ohlcs_and_save() -> Result<(), MyError> {
         };
 
         let raw_ohlc: Vec<Ohlc> = daily_quotes.get_ohlc();
-        // ./jquants_ohlcs/ にcode.jsonを保存
+        // code.jsonを保存
         match serde_json::to_string(&raw_ohlc) {
             Ok(res) => {
                 let path =
@@ -115,7 +116,7 @@ pub fn backtesting_to_json() -> Result<(), MyError> {
         }
 
         let code = row.get_code();
-        for step in (0..=1200).step_by(10) {
+        for step in (0..=1200).step_by(9) {
             match StocksBacktest::new(code, step) {
                 Ok(backtest_analyzer) => backtest_analyzer_vec.push(backtest_analyzer),
                 Err(e) => match e {
@@ -131,11 +132,11 @@ pub fn backtesting_to_json() -> Result<(), MyError> {
 
     let json_path = get_backtest_json_file_path(AssetType::Stocks { code: None })?;
 
-    //backtest_analyzer_vecをjsonに変換
-    let json = serde_json::to_string(&backtest_analyzer_vec).unwrap();
+    //backtest_analyzer_vecをserialize
+    let serialized = serde_json::to_string(&backtest_analyzer_vec).unwrap();
     //jsonをファイルに書き込み
     let mut file = File::create(&json_path).unwrap();
-    file.write_all(json.as_bytes()).unwrap();
+    file.write_all(serialized.as_bytes()).unwrap();
 
     info!("saved to {}", json_path.to_str().unwrap());
     Ok(())

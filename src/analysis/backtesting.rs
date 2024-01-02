@@ -13,15 +13,13 @@ pub enum LongShortControl {
 pub struct BacktestAnalyzer {
     date: String,
     standardized_diff: f64,
+    day1_38: f64,
     day5_with_stop_loss_38: f64,
     day5_with_stop_loss_50: f64,
-    day5_with_stop_loss_62: f64,
     day10_with_stop_loss_38: f64,
     day10_with_stop_loss_50: f64,
-    day10_with_stop_loss_62: f64,
     day20_with_stop_loss_38: f64,
     day20_with_stop_loss_50: f64,
-    day20_with_stop_loss_62: f64,
     long_or_short_or_control: LongShortControl,
 }
 
@@ -75,16 +73,16 @@ impl BacktestAnalyzer {
         let standardized_diff =
             (average_diff / (highest_high - lowest_low) * 1000.0).trunc() / 1000.0;
 
-        let mut ohlc_vec = testing_ohlc_60.to_vec();
-        for i in 0..testing_ohlc_60.len() - 1 {
-            ohlc_vec[i + 1].set_open(testing_ohlc_60[i].get_close());
-            if ohlc_vec[i + 1].get_open() > ohlc_vec[i + 1].get_high() {
-                ohlc_vec[i + 1].set_high(testing_ohlc_60[i].get_close());
-            }
-            if ohlc_vec[i + 1].get_open() < ohlc_vec[i + 1].get_low() {
-                ohlc_vec[i + 1].set_low(testing_ohlc_60[i].get_close());
-            }
-        }
+        // let mut ohlc_vec = testing_ohlc_60.to_vec();
+        // for i in 0..testing_ohlc_60.len() - 1 {
+        //     ohlc_vec[i + 1].set_open(testing_ohlc_60[i].get_close());
+        //     if ohlc_vec[i + 1].get_open() > ohlc_vec[i + 1].get_high() {
+        //         ohlc_vec[i + 1].set_high(testing_ohlc_60[i].get_close());
+        //     }
+        //     if ohlc_vec[i + 1].get_open() < ohlc_vec[i + 1].get_low() {
+        //         ohlc_vec[i + 1].set_low(testing_ohlc_60[i].get_close());
+        //     }
+        // }
 
         fn day_x_close(
             day_x: usize,
@@ -139,6 +137,13 @@ impl BacktestAnalyzer {
             }
         }
 
+        let day1_38 = day_x_close(
+            0,
+            future_ohlc_10,
+            &long_or_short_or_control,
+            stop_loss_range_38,
+        );
+
         let day5_with_stop_loss_38 = day_x_with_stop_loss(
             4,
             future_ohlc_10,
@@ -187,46 +192,16 @@ impl BacktestAnalyzer {
             &long_or_short_or_control,
         );
 
-        let stop_loss_range_62 = match long_or_short_or_control {
-            LongShortControl::Long => (last_close - low) * 0.62,
-            LongShortControl::Short => (high - last_close) * 0.62,
-            LongShortControl::Control => (high - low) * 0.62,
-        };
-
-        let day5_with_stop_loss_62 = day_x_with_stop_loss(
-            4,
-            future_ohlc_10,
-            stop_loss_range_62,
-            &long_or_short_or_control,
-        );
-
-        let day10_with_stop_loss_62 = day_x_with_stop_loss(
-            9,
-            future_ohlc_10,
-            stop_loss_range_62,
-            &long_or_short_or_control,
-        );
-
-        let day20_with_stop_loss_62 = day_x_with_stop_loss(
-            19,
-            future_ohlc_20,
-            stop_loss_range_62,
-            &long_or_short_or_control,
-        );
-
         Ok(Self {
             date: date.to_string(),
             standardized_diff,
-            // standardized_diff_closed_window,
+            day1_38,
             day5_with_stop_loss_38,
             day5_with_stop_loss_50,
-            day5_with_stop_loss_62,
             day10_with_stop_loss_38,
             day10_with_stop_loss_50,
-            day10_with_stop_loss_62,
             day20_with_stop_loss_38,
             day20_with_stop_loss_50,
-            day20_with_stop_loss_62,
             long_or_short_or_control,
         })
     }

@@ -88,16 +88,13 @@ pub fn get_backtest_json_file_path(ohlc_type: AssetType) -> Result<PathBuf, MyEr
     }
 }
 
-pub fn io_testrun(analyzed_at: &str) -> Result<(), MyError>{
-    let now = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
-    let file_name = format!("{}_{}", analyzed_at, now);
+pub fn get_topix_ohlc_file_path() -> Result<PathBuf, MyError> {
     let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
-    let file = Path::new(&gdrive_path)
+    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
         .join("trading23")
-        .join(file_name);
-
-    std::fs::write(file, "testrun").unwrap();
-    Ok(())
+        .join("fetched_ohlcs")
+        .join("jquants");
+    Ok(backtest_json_parent_dir_path.join("topix.json"))
 }
 
 #[cfg(test)]

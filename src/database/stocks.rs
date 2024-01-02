@@ -150,15 +150,15 @@ impl StockList {
             .count()
     }
 
-    fn determine_entry_long_or_short(&self, date: &str) -> EntryLongOrShort {
+    fn determine_entry_long_or_short(&self, date: &str) -> DateAndLongShortCount {
         let long = self.count_long_stocks();
         let short = self.count_short_stocks();
 
-        EntryLongOrShort::new(date, long, short)
+        DateAndLongShortCount::new(date, long, short)
     }
 
     fn output_stocks_list(&self, date: &str) -> Output {
-        let entry_long_or_short = self.determine_entry_long_or_short(date);
+        let date_and_long_short_count = self.determine_entry_long_or_short(date);
 
         let mut long_stocks = String::new();
         writeln!(long_stocks, "Long").unwrap();
@@ -174,19 +174,22 @@ impl StockList {
         }
 
         Output {
-            entry_long_or_short,
+            date_and_long_short_count,
             long_stocks,
             short_stocks,
         }
     }
+    pub fn len(&self) -> usize {
+        self.stocks.len()
+    }
 }
 
-struct EntryLongOrShort {
+struct DateAndLongShortCount {
     date: String,
     long_count: usize,
     short_count: usize,
 }
-impl EntryLongOrShort {
+impl DateAndLongShortCount {
     fn new(date: &str, long_count: usize, short_count: usize) -> Self {
         Self {
             date: date.to_string(),
@@ -209,14 +212,14 @@ impl EntryLongOrShort {
 }
 
 pub struct Output {
-    entry_long_or_short: EntryLongOrShort,
+    date_and_long_short_count: DateAndLongShortCount,
     long_stocks: String,
     short_stocks: String,
 }
 impl Output {
     // getters
     pub fn get_entry_long_or_short(&self) -> String {
-        self.entry_long_or_short.output_entry_long_or_short()
+        self.date_and_long_short_count.output_entry_long_or_short()
     }
     pub fn get_long_stocks(&self) -> &str {
         &self.long_stocks
@@ -245,6 +248,36 @@ impl SelectDate {
     }
     pub fn get_day(&self) -> u32 {
         self.day
+    }
+}
+
+pub fn select_all_stocks(conn: &Connection) -> StockList {
+    let mut stmt = conn
+        .prepare("SELECT * FROM stocks ORDER BY analyzed_at")
+        .unwrap();
+    let stock_iter = stmt
+        .query_map([], |row| {
+            Ok(Stock {
+                id: row.get(0)?,
+                code: row.get(1)?,
+                name: row.get(2)?,
+                break_or_not: row.get(3)?,
+                long_or_short: row.get(4)?,
+                stop_loss_order: row.get(5)?,
+                units: row.get(6)?,
+                daily_diff: row.get(7)?,
+                monthly_diff: row.get(8)?,
+                monthly_trend: row.get(9)?,
+                analyzed_at: row.get(10)?,
+                created_at: row.get(11)?,
+            })
+        })
+        .unwrap();
+
+    let stock_list: Result<Vec<Stock>, rusqlite::Error> = stock_iter.collect();
+
+    StockList {
+        stocks: stock_list.unwrap(),
     }
 }
 
