@@ -45,6 +45,62 @@ impl Ohlc {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct OhlcPremium {
+    date: String,
+    open: f64,
+    high: f64,
+    low: f64,
+    close: f64,
+    morning_close: f64,
+    afternoon_open: f64,
+}
+
+impl OhlcPremium {
+    pub fn new(
+        date: String,
+        open: f64,
+        high: f64,
+        low: f64,
+        close: f64,
+        morning_close: f64,
+        afternoon_open: f64,
+    ) -> Self {
+        Self {
+            date,
+            open,
+            high,
+            low,
+            close,
+            morning_close,
+            afternoon_open,
+        }
+    }
+
+    //getters
+    pub fn get_date(&self) -> &str {
+        self.date.as_str()
+    }
+    pub fn get_open(&self) -> f64 {
+        self.open
+    }
+    pub fn get_high(&self) -> f64 {
+        self.high
+    }
+    pub fn get_low(&self) -> f64 {
+        self.low
+    }
+    pub fn get_close(&self) -> f64 {
+        self.close
+    }
+    pub fn get_morning_close(&self) -> f64 {
+        self.morning_close
+    }
+    pub fn get_afternoon_open(&self) -> f64 {
+        self.afternoon_open
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub enum BullBear {
     Bull,

@@ -41,7 +41,7 @@ pub async fn send_message_from_jquants_output(output: Output) {
 pub async fn send_message_from_jquants_daytrading(
     output: crate::analysis::stocks_daytrading::Output,
 ) {
-    send_message(&output.get_date()).await;
+    send_message(output.get_date()).await;
     thread::sleep(Duration::from_secs(2));
     send_message(output.get_breakout_resistance_stocks()).await;
     thread::sleep(Duration::from_secs(2));

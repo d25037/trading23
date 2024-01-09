@@ -1,9 +1,7 @@
-use analysis::backtesting;
 use clap::{Args, Parser, Subcommand};
-use core::arch;
 use database::stocks::SelectDate;
 use log::{error, info};
-use std::{ascii::AsciiExt, env};
+use std::env;
 
 mod analysis;
 mod config;
@@ -98,53 +96,30 @@ async fn main() {
                     //     };
                     // }
                     // jquants::backtesting::backtesting_to_json().unwrap();
-                    let mut stocks_daytrading_list =
-                        analysis::stocks_daytrading::async_exec("2019-04-01", "2023-12-28")
+                    let stocks_daytrading_list =
+                        analysis::stocks_daytrading::async_exec("2023-07-01", "2024-01-01")
                             .await
                             .unwrap();
-                    let topix_list =
-                        analysis::backtesting_topix::BacktestingTopixList::from_json_file()
-                            .unwrap();
+                    // let topix_list =
+                    //     analysis::backtesting_topix::BacktestingTopixList::from_json_file()
+                    //         .unwrap();
 
-                    let limit = [(0.06, 0.09), (0.09, 0.12), (0.12, 0.15)];
-                    info!("strong positive window");
-                    for (lower_limit, upper_limit) in limit.iter() {
-                        info!("lower_limit: {}, upper_limit: {}", lower_limit, upper_limit);
-                        stocks_daytrading_list.get_window_related_result(
-                            topix_list.get_strong_positive_window_list(),
-                            *lower_limit,
-                            *upper_limit,
+                    let topix_daily_window_list =
+                        analysis::backtesting_topix::TopixDailyWindowList::new(
+                            &analysis::backtesting_topix::BacktestingTopixList::from_json_file()
+                                .unwrap(),
                         );
-                    }
-                    info!("mild positive window");
-                    for (lower_limit, upper_limit) in limit.iter() {
-                        info!("lower_limit: {}, upper_limit: {}", lower_limit, upper_limit);
 
-                        stocks_daytrading_list.get_window_related_result(
-                            topix_list.get_mild_positive_window_list(),
-                            *lower_limit,
-                            *upper_limit,
-                        );
-                    }
-                    info!("mild negative window");
-                    for (lower_limit, upper_limit) in limit.iter() {
-                        info!("lower_limit: {}, upper_limit: {}", lower_limit, upper_limit);
-
-                        stocks_daytrading_list.get_window_related_result(
-                            topix_list.get_mild_negative_window_list(),
-                            *lower_limit,
-                            *upper_limit,
-                        );
-                    }
-                    info!("strong negative window");
-                    for (lower_limit, upper_limit) in limit.iter() {
-                        info!("lower_limit: {}, upper_limit: {}", lower_limit, upper_limit);
-
-                        stocks_daytrading_list.get_window_related_result(
-                            topix_list.get_strong_negative_window_list(),
-                            *lower_limit,
-                            *upper_limit,
-                        );
+                    let status = [
+                        analysis::stocks_daytrading::Status::BreakoutResistance,
+                        analysis::stocks_daytrading::Status::FailedBreakoutResistance,
+                        analysis::stocks_daytrading::Status::FailedBreakoutSupport,
+                        analysis::stocks_daytrading::Status::BreakoutSupport,
+                    ];
+                    for x in status.into_iter() {
+                        let result = stocks_daytrading_list
+                            .get_windows_related_result_2(x, &topix_daily_window_list);
+                        info!("result: {}", result);
                     }
                 }
 
@@ -155,12 +130,6 @@ async fn main() {
                     jquants::live::fetch_daily_quotes_once(&client, code)
                         .await
                         .unwrap();
-                    let topix = jquants::live::Topix::new(&client).await.unwrap();
-                    topix.save_to_json_file().unwrap();
-                    let backtesting_topix_list =
-                        analysis::backtesting_topix::BacktestingTopixList::from_json_file()
-                            .unwrap();
-                    info!("{:?}", backtesting_topix_list.get_positive_window_list());
                 }
                 _ => {}
             }

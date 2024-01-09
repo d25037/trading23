@@ -38,10 +38,7 @@ pub async fn fetch_ohlcs_and_save() -> Result<(), MyError> {
         let code = row.get_code();
 
         let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
-            Ok(res) => {
-                // debug!("{:?}", res);
-                serde_json::from_str(&res).unwrap()
-            }
+            Ok(res) => res,
             Err(e) => {
                 error!("{}", e);
                 return Err(e);

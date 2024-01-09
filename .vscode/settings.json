@@ -17,6 +17,7 @@
     "responsetime",
     "rusqlite",
     "statrs",
+    "tertile",
     "testrun",
     "topix",
     "xlabel",

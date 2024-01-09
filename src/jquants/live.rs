@@ -1,4 +1,4 @@
-use crate::analysis::live::{Ohlc, OhlcAnalyzer};
+use crate::analysis::live::{Ohlc, OhlcAnalyzer, OhlcPremium};
 use crate::analysis::{backtesting_topix, stocks_daytrading};
 use crate::my_error::MyError;
 use crate::my_file_io::{get_fetched_ohlc_file_path, AssetType};
@@ -296,7 +296,7 @@ impl TopixInner {
     }
 }
 
-pub async fn fetch_daily_quotes(client: &Client, code: i32) -> Result<String, MyError> {
+pub async fn fetch_daily_quotes(client: &Client, code: i32) -> Result<DailyQuotes, MyError> {
     let config = crate::config::GdriveJson::new();
     let id_token = config.jquants_id_token();
     let url = "https://api.jquants.com/v1/prices/daily_quotes";
@@ -314,9 +314,8 @@ pub async fn fetch_daily_quotes(client: &Client, code: i32) -> Result<String, My
     match res.status() {
         StatusCode::OK => {
             info!("Status code: {}, code: {}", res.status(), code);
-            let body = res.text().await?;
-            // info!("{}", body);
-            Ok(body)
+            let daily_quotes = res.json::<DailyQuotes>().await?;
+            Ok(daily_quotes)
         }
         StatusCode::UNAUTHORIZED => {
             let body = res.text().await?;
@@ -358,6 +357,32 @@ impl DailyQuotes {
         }
         ohlc_vec
     }
+
+    pub fn get_ohlc_premium(self) -> Vec<OhlcPremium> {
+        let mut ohlc_vec = Vec::new();
+        for jquants_ohlc in self.daily_quotes {
+            if jquants_ohlc.open.is_none()
+                || jquants_ohlc.high.is_none()
+                || jquants_ohlc.low.is_none()
+                || jquants_ohlc.close.is_none()
+                || jquants_ohlc.morning_close.is_none()
+                || jquants_ohlc.afternoon_open.is_none()
+            {
+                continue;
+            }
+            let jquants_ohlc = OhlcPremium::new(
+                jquants_ohlc.date,
+                jquants_ohlc.open.unwrap(),
+                jquants_ohlc.high.unwrap(),
+                jquants_ohlc.low.unwrap(),
+                jquants_ohlc.close.unwrap(),
+                jquants_ohlc.morning_close.unwrap(),
+                jquants_ohlc.afternoon_open.unwrap(),
+            );
+            ohlc_vec.push(jquants_ohlc);
+        }
+        ohlc_vec
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -394,6 +419,10 @@ struct DailyQuotesInner {
     close: Option<f64>,
     // #[serde(rename = "AdjustmentVolume")]
     // adjustment_volume: Option<f64>,
+    #[serde(rename = "MorningAdjustmentClose")]
+    morning_close: Option<f64>,
+    #[serde(rename = "AfternoonAdjustmentOpen")]
+    afternoon_open: Option<f64>,
 }
 
 pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingCalender, MyError> {
@@ -480,17 +509,14 @@ pub async fn fetch_nikkei225_daytrading(
         let code = row.get_code();
 
         let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
-            Ok(res) => {
-                // debug!("{:?}", res);
-                serde_json::from_str(&res).unwrap()
-            }
+            Ok(res) => res,
             Err(e) => {
                 error!("{}", e);
                 return Err(e);
             }
         };
 
-        let raw_ohlc: Vec<Ohlc> = daily_quotes.get_ohlc();
+        let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
         let now = chrono::Local::now().format("%Y-%m-%d").to_string();
         let last_date = raw_ohlc.last().unwrap().get_date().to_string();
         if now != last_date && !force {
@@ -509,11 +535,11 @@ pub async fn fetch_nikkei225_daytrading(
             }
         }
     }
-    // let someday = (chrono::Local::now() - ChronoDuration::days(5))
-    //     .format("%Y-%m-%d")
-    //     .to_string();
+    let someday = (chrono::Local::now() - ChronoDuration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
 
-    let mut stocks_daytrading_list = match stocks_daytrading::async_exec(&today, &today).await {
+    let mut stocks_daytrading_list = match stocks_daytrading::async_exec(&someday, &someday).await {
         Ok(res) => res,
         Err(e) => {
             error!("{}", e);
@@ -566,10 +592,7 @@ pub async fn _fetch_nikkei225(force: bool) -> Result<(), MyError> {
         let name = row.get_name();
 
         let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
-            Ok(res) => {
-                // debug!("{:?}", res);
-                serde_json::from_str(&res).unwrap()
-            }
+            Ok(res) => res,
             Err(e) => {
                 error!("{}", e);
                 return Err(e);
@@ -612,28 +635,26 @@ pub async fn fetch_daily_quotes_once(client: &Client, code: i32) -> Result<Strin
         return Err(e);
     }
 
+    info!("Fetch Daily Quotes");
     let daily_quotes: DailyQuotes = match fetch_daily_quotes(client, code).await {
-        Ok(res) => {
-            // debug!("{:?}", res);
-            serde_json::from_str(&res).unwrap()
-        }
+        Ok(res) => res,
         Err(e) => {
             error!("{}", e);
             return Err(e);
         }
     };
 
-    let raw_ohlc: Vec<Ohlc> = daily_quotes.get_ohlc();
+    let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
     let last_data = raw_ohlc.last().unwrap();
     let last_date = last_data.get_date().to_string();
     info!("last_data: {:?}", last_data);
-    let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
+    // let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
 
-    ohlc_analyzer.get_shorter_chart();
-    info!(
-        "daily standardized diff: {}",
-        ohlc_analyzer.get_shorter_ohlc_standardized_diff()
-    );
+    // ohlc_analyzer.get_shorter_chart();
+    // info!(
+    //     "daily standardized diff: {}",
+    //     ohlc_analyzer.get_shorter_ohlc_standardized_diff()
+    // );
 
     Ok(last_date)
 }
