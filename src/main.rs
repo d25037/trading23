@@ -9,6 +9,7 @@ mod database;
 mod gmo_coin;
 mod jquants;
 mod line_notify;
+mod markdown;
 mod my_error;
 mod my_file_io;
 mod notion;
@@ -84,7 +85,7 @@ async fn main() {
                         },
                     };
 
-                    line_notify::send_message_from_jquants_daytrading(output).await;
+                    // line_notify::send_message_from_jquants_daytrading(output).await;
                 }
 
                 // backtesting
@@ -130,7 +131,20 @@ async fn main() {
                     jquants::live::fetch_daily_quotes_once(&client, code)
                         .await
                         .unwrap();
+
+                    let someday = "2024-01-10";
+                    let mut output = analysis::stocks_daytrading::async_exec(someday, someday)
+                        .await
+                        .unwrap();
+
+                    output.sort_by_standardized_diff();
+                    let markdown = output.output_for_markdown(someday);
+
+                    let markdown_path = my_file_io::get_jquants_markdown_path(someday).unwrap();
+
+                    markdown.write_to_file(&markdown_path);
                 }
+
                 _ => {}
             }
         }

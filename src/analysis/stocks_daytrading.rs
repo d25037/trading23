@@ -1,5 +1,6 @@
 use crate::analysis::backtesting_topix::BacktestingTopixList;
 use crate::database::stocks;
+use crate::markdown::{self, Markdown};
 use crate::my_file_io::Nikkei225;
 use crate::my_file_io::{get_fetched_ohlc_file_path, load_nikkei225_list, AssetType};
 use crate::{analysis::live::OhlcPremium, my_error::MyError};
@@ -186,8 +187,28 @@ impl StocksDaytrading {
 
         buffer
     }
+    fn markdown_body_output(&self) -> String {
+        let mut buffer = String::new();
+        let name = match self.name.chars().count() > 5 {
+            true => {
+                let name: String = self.name.chars().take(4).collect();
+                name
+            }
+            false => self.name.to_owned(),
+        };
+
+        writeln!(
+            buffer,
+            "{} {}, ({}, {}, {}), {}円",
+            self.code, name, self.atr, self.unit, self.standardized_diff, self.required_amount
+        )
+        .unwrap();
+
+        buffer
+    }
 }
 
+#[derive(Debug)]
 pub struct StocksDaytradingList {
     data: Vec<StocksDaytrading>,
 }
@@ -270,45 +291,65 @@ impl StocksDaytradingList {
     //     }
     // }
 
-    pub fn output_for_line_notify(&self) -> Output {
+    pub fn output_for_markdown(&self, date: &str) -> Markdown {
+        let mut markdown = Markdown::new();
+        markdown.h1(date);
+
+        let mut markdown_br = Markdown::new();
+        let mut markdown_fbr = Markdown::new();
+        let mut markdown_fbs = Markdown::new();
+        let mut markdown_bs = Markdown::new();
+
         let mut breakout_resistance_stocks = String::new();
         writeln!(breakout_resistance_stocks, "BR").unwrap();
+        markdown_br.h2("Breakout Resistance");
+
         let mut failed_breakout_resistance_stocks = String::new();
         writeln!(failed_breakout_resistance_stocks, "FBR").unwrap();
+        markdown_fbr.h2("Failed Breakout Resistance");
+
         let mut failed_breakout_support_stocks = String::new();
         writeln!(failed_breakout_support_stocks, "FBS").unwrap();
+        markdown_fbs.h2("Failed Breakout Support");
+
         let mut breakout_support_stocks = String::new();
         writeln!(breakout_support_stocks, "BS").unwrap();
+        markdown_bs.h2("Breakout Support");
 
         for stocks_daytrading in &self.data {
             match stocks_daytrading.status {
                 Status::BreakoutResistance => {
                     breakout_resistance_stocks =
                         stocks_daytrading.live_output(breakout_resistance_stocks);
+                    markdown_br.body(&stocks_daytrading.markdown_body_output());
                 }
                 Status::FailedBreakoutResistance => {
                     failed_breakout_resistance_stocks =
                         stocks_daytrading.live_output(failed_breakout_resistance_stocks);
+                    markdown_fbr.body(&stocks_daytrading.markdown_body_output());
                 }
                 Status::FailedBreakoutSupport => {
                     failed_breakout_support_stocks =
                         stocks_daytrading.live_output(failed_breakout_support_stocks);
+                    markdown_fbs.body(&stocks_daytrading.markdown_body_output());
                 }
                 Status::BreakoutSupport => {
                     breakout_support_stocks =
                         stocks_daytrading.live_output(breakout_support_stocks);
+                    markdown_bs.body(&stocks_daytrading.markdown_body_output());
                 }
                 _ => {}
             }
         }
 
-        Output {
-            date: self.data[0].analyzed_at.clone(),
-            breakout_resistance_stocks,
-            failed_breakout_resistance_stocks,
-            failed_breakout_support_stocks,
-            breakout_support_stocks,
-        }
+        markdown.append(markdown_br);
+        markdown.append(markdown_fbr);
+        markdown.append(markdown_fbs);
+        markdown.append(markdown_bs);
+
+        info!("{}", markdown.buffer());
+
+        markdown
     }
 
     fn t_test(&self) -> String {

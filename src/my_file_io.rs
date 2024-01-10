@@ -97,6 +97,15 @@ pub fn get_topix_ohlc_file_path() -> Result<PathBuf, MyError> {
     Ok(backtest_json_parent_dir_path.join("topix.json"))
 }
 
+pub fn get_jquants_markdown_path(file_name: &str) -> Result<PathBuf, MyError> {
+    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
+        .join("trading23")
+        .join("jquants_markdown");
+
+    Ok(backtest_json_parent_dir_path.join(file_name))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

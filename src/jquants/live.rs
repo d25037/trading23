@@ -2,6 +2,7 @@ use crate::analysis::live::{Ohlc, OhlcAnalyzer, OhlcPremium};
 use crate::analysis::{backtesting_topix, stocks_daytrading};
 use crate::my_error::MyError;
 use crate::my_file_io::{get_fetched_ohlc_file_path, AssetType};
+use crate::{markdown, my_file_io};
 use anyhow::{anyhow, Result};
 use chrono::Duration as ChronoDuration;
 use log::error;
@@ -455,9 +456,7 @@ pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingC
     }
 }
 
-pub async fn fetch_nikkei225_daytrading(
-    force: bool,
-) -> Result<crate::analysis::stocks_daytrading::Output, MyError> {
+pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::Markdown, MyError> {
     let client = Client::new();
 
     info!("Starting First Fetch");
@@ -535,11 +534,8 @@ pub async fn fetch_nikkei225_daytrading(
             }
         }
     }
-    let someday = (chrono::Local::now() - ChronoDuration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
 
-    let mut stocks_daytrading_list = match stocks_daytrading::async_exec(&someday, &someday).await {
+    let mut stocks_daytrading_list = match stocks_daytrading::async_exec(&today, &today).await {
         Ok(res) => res,
         Err(e) => {
             error!("{}", e);
@@ -548,7 +544,11 @@ pub async fn fetch_nikkei225_daytrading(
     };
     stocks_daytrading_list.sort_by_standardized_diff();
 
-    Ok(stocks_daytrading_list.output_for_line_notify())
+    let markdown = stocks_daytrading_list.output_for_markdown(&today);
+    let markdown_path = crate::my_file_io::get_jquants_markdown_path(&today).unwrap();
+    markdown.write_to_file(&markdown_path);
+
+    Ok(stocks_daytrading_list.output_for_markdown(&today))
 }
 
 pub async fn _fetch_nikkei225(force: bool) -> Result<(), MyError> {
