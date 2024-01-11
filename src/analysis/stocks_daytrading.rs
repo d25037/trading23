@@ -1,12 +1,10 @@
-use crate::analysis::backtesting_topix::BacktestingTopixList;
-use crate::database::stocks;
-use crate::markdown::{self, Markdown};
+use crate::markdown::Markdown;
 use crate::my_file_io::Nikkei225;
 use crate::my_file_io::{get_fetched_ohlc_file_path, load_nikkei225_list, AssetType};
 use crate::{analysis::live::OhlcPremium, my_error::MyError};
 use anyhow::anyhow;
 use chrono::{Duration, NaiveDate};
-use log::{debug, error, info};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use statrs::distribution::ContinuousCDF;
 use statrs::distribution::StudentsT;
@@ -168,25 +166,6 @@ impl StocksDaytrading {
         })
     }
 
-    fn live_output(&self, mut buffer: String) -> String {
-        writeln!(buffer).unwrap();
-        let name = match self.name.chars().count() > 5 {
-            true => {
-                let name: String = self.name.chars().take(4).collect();
-                name
-            }
-            false => self.name.to_owned(),
-        };
-
-        writeln!(
-            buffer,
-            "{} {}, ({}, {}, {}), {}",
-            self.code, name, self.atr, self.unit, self.standardized_diff, self.required_amount
-        )
-        .unwrap();
-
-        buffer
-    }
     fn markdown_body_output(&self) -> String {
         let mut buffer = String::new();
         let name = match self.name.chars().count() > 5 {
@@ -203,6 +182,17 @@ impl StocksDaytrading {
             self.code, name, self.atr, self.unit, self.standardized_diff, self.required_amount
         )
         .unwrap();
+
+        if self.result_close.is_some() {
+            writeln!(
+                buffer,
+                "MC: {}, AO: {}, AC: {}",
+                self.result_morning_close.unwrap(),
+                self.result_afternoon_open.unwrap(),
+                self.result_close.unwrap()
+            )
+            .unwrap();
+        }
 
         buffer
     }
@@ -273,24 +263,6 @@ impl StocksDaytradingList {
         });
     }
 
-    // pub fn output(&self) {
-    //     for stocks_daytrading in &self.data {
-    //         debug!(
-    //             "[{}] {} {}, Atr: {}, Unit: {}, {}, {:?}, result:{},{},{}",
-    //             stocks_daytrading.analyzed_at,
-    //             stocks_daytrading.code,
-    //             stocks_daytrading.name,
-    //             stocks_daytrading.atr,
-    //             stocks_daytrading.unit,
-    //             stocks_daytrading.standardized_diff,
-    //             stocks_daytrading.status,
-    //             stocks_daytrading.result_morning_close.unwrap_or(0.0),
-    //             stocks_daytrading.result_afternoon_open.unwrap_or(0.0),
-    //             stocks_daytrading.result_close.unwrap_or(0.0),
-    //         );
-    //     }
-    // }
-
     pub fn output_for_markdown(&self, date: &str) -> Markdown {
         let mut markdown = Markdown::new();
         markdown.h1(date);
@@ -300,42 +272,23 @@ impl StocksDaytradingList {
         let mut markdown_fbs = Markdown::new();
         let mut markdown_bs = Markdown::new();
 
-        let mut breakout_resistance_stocks = String::new();
-        writeln!(breakout_resistance_stocks, "BR").unwrap();
         markdown_br.h2("Breakout Resistance");
-
-        let mut failed_breakout_resistance_stocks = String::new();
-        writeln!(failed_breakout_resistance_stocks, "FBR").unwrap();
         markdown_fbr.h2("Failed Breakout Resistance");
-
-        let mut failed_breakout_support_stocks = String::new();
-        writeln!(failed_breakout_support_stocks, "FBS").unwrap();
         markdown_fbs.h2("Failed Breakout Support");
-
-        let mut breakout_support_stocks = String::new();
-        writeln!(breakout_support_stocks, "BS").unwrap();
         markdown_bs.h2("Breakout Support");
 
         for stocks_daytrading in &self.data {
             match stocks_daytrading.status {
                 Status::BreakoutResistance => {
-                    breakout_resistance_stocks =
-                        stocks_daytrading.live_output(breakout_resistance_stocks);
                     markdown_br.body(&stocks_daytrading.markdown_body_output());
                 }
                 Status::FailedBreakoutResistance => {
-                    failed_breakout_resistance_stocks =
-                        stocks_daytrading.live_output(failed_breakout_resistance_stocks);
                     markdown_fbr.body(&stocks_daytrading.markdown_body_output());
                 }
                 Status::FailedBreakoutSupport => {
-                    failed_breakout_support_stocks =
-                        stocks_daytrading.live_output(failed_breakout_support_stocks);
                     markdown_fbs.body(&stocks_daytrading.markdown_body_output());
                 }
                 Status::BreakoutSupport => {
-                    breakout_support_stocks =
-                        stocks_daytrading.live_output(breakout_support_stocks);
                     markdown_bs.body(&stocks_daytrading.markdown_body_output());
                 }
                 _ => {}
@@ -613,66 +566,6 @@ impl StocksDaytradingList {
             )
         };
 
-        // let close_with_push = if morning_close.get_mean() > 0.0 {
-        //     TTestResult::new(
-        //         self.data
-        //             .iter()
-        //             .map(|stocks_daytrading| {
-        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > 1.0 {
-        //                     stocks_daytrading.result_push_close.unwrap_or(0.0) * 2.0
-        //                 } else {
-        //                     stocks_daytrading.result_close.unwrap_or(0.0)
-        //                 }
-        //             })
-        //             .collect::<Vec<_>>(),
-        //     )
-        // } else {
-        //     TTestResult::new(
-        //         self.data
-        //             .iter()
-        //             .map(|stocks_daytrading| {
-        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -1.0 {
-        //                     stocks_daytrading.result_push_close.unwrap_or(0.0) * 2.0
-        //                 } else {
-        //                     stocks_daytrading.result_close.unwrap_or(0.0)
-        //                 }
-        //             })
-        //             .collect::<Vec<_>>(),
-        //     )
-        // };
-
-        // let close_with_loss_cut_and_push = if morning_close.get_mean() > 0.0 {
-        //     TTestResult::new(
-        //         self.data
-        //             .iter()
-        //             .map(|stocks_daytrading| {
-        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -0.5 {
-        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
-        //                 } else if stocks_daytrading.result_morning_close.unwrap_or(0.0) > 1.0 {
-        //                     stocks_daytrading.result_push_close.unwrap_or(0.0) * 2.0
-        //                 } else {
-        //                     stocks_daytrading.result_close.unwrap_or(0.0)
-        //                 }
-        //             })
-        //             .collect::<Vec<_>>(),
-        //     )
-        // } else {
-        //     TTestResult::new(
-        //         self.data
-        //             .iter()
-        //             .map(|stocks_daytrading| {
-        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > 0.5 {
-        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
-        //                 } else if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -1.0 {
-        //                     stocks_daytrading.result_push_close.unwrap_or(0.0) * 2.0
-        //                 } else {
-        //                     stocks_daytrading.result_close.unwrap_or(0.0)
-        //                 }
-        //             })
-        //             .collect::<Vec<_>>(),
-        //     )
-        // };
-
         let mut buffer = String::new();
         writeln!(buffer, "morning_close: {}", morning_close).unwrap();
         // writeln!(buffer, "afternoon_open: {}", afternoon_open).unwrap();
@@ -752,7 +645,7 @@ impl StocksDaytradingList {
         writeln!(buffer).unwrap();
         writeln!(buffer, "<{:?}>", status).unwrap();
 
-        let limit = [(0.05, 0.09), (0.09, 0.12), (0.12, 0.16)];
+        let limit = [(0.0, 0.09), (0.09, 0.12), (0.12, 0.40)];
 
         writeln!(buffer, "Strong Positive").unwrap();
         for (lower_limit, upper_limit) in limit.iter() {
@@ -877,7 +770,7 @@ impl StocksDaytradingList {
         writeln!(buffer).unwrap();
         writeln!(buffer, "<{:?}>", status).unwrap();
 
-        let limit = [(0.05, 0.09), (0.09, 0.115), (0.115, 0.16)];
+        let limit = [(0.0, 0.09), (0.09, 0.115), (0.115, 0.4)];
 
         writeln!(buffer, "Strong Positive").unwrap();
         for (lower_limit, upper_limit) in limit.iter() {
@@ -1101,30 +994,30 @@ impl std::fmt::Display for TTestResult {
     }
 }
 
-pub struct Output {
-    date: String,
-    breakout_resistance_stocks: String,
-    failed_breakout_resistance_stocks: String,
-    failed_breakout_support_stocks: String,
-    breakout_support_stocks: String,
-}
-impl Output {
-    pub fn get_date(&self) -> &str {
-        &self.date
-    }
-    pub fn get_breakout_resistance_stocks(&self) -> &str {
-        &self.breakout_resistance_stocks
-    }
-    pub fn get_failed_breakout_resistance_stocks(&self) -> &str {
-        &self.failed_breakout_resistance_stocks
-    }
-    pub fn get_failed_breakout_support_stocks(&self) -> &str {
-        &self.failed_breakout_support_stocks
-    }
-    pub fn get_breakout_support_stocks(&self) -> &str {
-        &self.breakout_support_stocks
-    }
-}
+// pub struct Output {
+//     date: String,
+//     breakout_resistance_stocks: String,
+//     failed_breakout_resistance_stocks: String,
+//     failed_breakout_support_stocks: String,
+//     breakout_support_stocks: String,
+// }
+// impl Output {
+//     pub fn get_date(&self) -> &str {
+//         &self.date
+//     }
+//     pub fn get_breakout_resistance_stocks(&self) -> &str {
+//         &self.breakout_resistance_stocks
+//     }
+//     pub fn get_failed_breakout_resistance_stocks(&self) -> &str {
+//         &self.failed_breakout_resistance_stocks
+//     }
+//     pub fn get_failed_breakout_support_stocks(&self) -> &str {
+//         &self.failed_breakout_support_stocks
+//     }
+//     pub fn get_breakout_support_stocks(&self) -> &str {
+//         &self.breakout_support_stocks
+//     }
+// }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum Status {

@@ -545,7 +545,7 @@ pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::
     stocks_daytrading_list.sort_by_standardized_diff();
 
     let markdown = stocks_daytrading_list.output_for_markdown(&today);
-    let markdown_path = crate::my_file_io::get_jquants_markdown_path(&today).unwrap();
+    let markdown_path = crate::my_file_io::get_jquants_break_path(&today).unwrap();
     markdown.write_to_file(&markdown_path);
 
     Ok(stocks_daytrading_list.output_for_markdown(&today))

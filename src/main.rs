@@ -126,23 +126,30 @@ async fn main() {
 
                 // testrun
                 (false, true) => {
-                    let code = args.code.unwrap_or(7203);
-                    let client = reqwest::Client::new();
-                    jquants::live::fetch_daily_quotes_once(&client, code)
+                    // let code = args.code.unwrap_or(7203);
+                    // let client = reqwest::Client::new();
+                    // jquants::live::fetch_daily_quotes_once(&client, code)
+                    //     .await
+                    //     .unwrap();
+
+                    let someday = "2024-01-11";
+                    let mut break_output =
+                        analysis::stocks_daytrading::async_exec(someday, someday)
+                            .await
+                            .unwrap();
+
+                    break_output.sort_by_standardized_diff();
+                    let break_markdown = break_output.output_for_markdown(someday);
+                    let break_path = my_file_io::get_jquants_break_path(someday).unwrap();
+                    break_markdown.write_to_file(&break_path);
+
+                    let mut window_output = analysis::stocks_window::async_exec(someday, someday)
                         .await
                         .unwrap();
-
-                    let someday = "2024-01-10";
-                    let mut output = analysis::stocks_daytrading::async_exec(someday, someday)
-                        .await
-                        .unwrap();
-
-                    output.sort_by_standardized_diff();
-                    let markdown = output.output_for_markdown(someday);
-
-                    let markdown_path = my_file_io::get_jquants_markdown_path(someday).unwrap();
-
-                    markdown.write_to_file(&markdown_path);
+                    window_output.sort_by_latest_move();
+                    let window_markdown = window_output.output_for_markdown(someday);
+                    let window_path = my_file_io::get_jquants_window_path(someday).unwrap();
+                    window_markdown.write_to_file(&window_path);
                 }
 
                 _ => {}
