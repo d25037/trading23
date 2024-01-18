@@ -74,7 +74,7 @@ async fn main() {
                     // let conn = database::stocks::open_db().unwrap();
                     // let output = database::stocks::select_stocks(&conn, None);
                     // line_notify::send_message_from_jquants_output(output).await;
-                    let output = match jquants::live::fetch_nikkei225_daytrading(args.force).await {
+                    match jquants::live::fetch_nikkei225(args.force).await {
                         Ok(output) => {
                             info!("fetch_nikkei225 success");
                             output
@@ -85,7 +85,20 @@ async fn main() {
                         },
                     };
 
-                    // line_notify::send_message_from_jquants_daytrading(output).await;
+                    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                    let day_before_5 = chrono::Local::now()
+                        .checked_sub_signed(chrono::Duration::days(5))
+                        .unwrap()
+                        .format("%Y-%m-%d")
+                        .to_string();
+
+                    let stocks_window_list =
+                        analysis::stocks_window::create_stocks_window_list(&day_before_5, &today)
+                            .await
+                            .unwrap();
+                    stocks_window_list.bbb().unwrap();
+
+                    line_notify::send_message("success").await;
                 }
 
                 // backtesting
@@ -132,24 +145,24 @@ async fn main() {
                     //     .await
                     //     .unwrap();
 
-                    let someday = "2024-01-11";
-                    let mut break_output =
-                        analysis::stocks_daytrading::async_exec(someday, someday)
+                    let from = "2024-01-15";
+                    let to = "2024-01-18";
+                    // let mut break_output =
+                    //     analysis::stocks_daytrading::async_exec(someday, someday)
+                    //         .await
+                    //         .unwrap();
+
+                    // break_output.sort_by_standardized_diff();
+                    // let break_markdown = break_output.output_for_markdown(someday);
+                    // let break_path = my_file_io::get_jquants_break_path(someday).unwrap();
+                    // break_markdown.write_to_file(&break_path);
+
+                    let stocks_window_list =
+                        analysis::stocks_window::create_stocks_window_list(from, to)
                             .await
                             .unwrap();
 
-                    break_output.sort_by_standardized_diff();
-                    let break_markdown = break_output.output_for_markdown(someday);
-                    let break_path = my_file_io::get_jquants_break_path(someday).unwrap();
-                    break_markdown.write_to_file(&break_path);
-
-                    let mut window_output = analysis::stocks_window::async_exec(someday, someday)
-                        .await
-                        .unwrap();
-                    window_output.sort_by_latest_move();
-                    let window_markdown = window_output.output_for_markdown(someday);
-                    let window_path = my_file_io::get_jquants_window_path(someday).unwrap();
-                    window_markdown.write_to_file(&window_path);
+                    stocks_window_list.bbb().unwrap();
                 }
 
                 _ => {}

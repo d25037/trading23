@@ -456,6 +456,87 @@ pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingC
     }
 }
 
+pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
+    let client = Client::new();
+
+    info!("Starting First Fetch");
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    match first_fetch(&client, Some(&today)).await {
+        Ok(res) => match res.is_today_trading_day() {
+            true => info!("Today is Trading Day"),
+            false => match force {
+                true => info!("Today is Holiday, but force is true"),
+                false => {
+                    error!("Today is Holiday");
+                    return Err(MyError::Holiday);
+                }
+            },
+        },
+        Err(e) => {
+            error!("{}", e);
+            return Err(e);
+        }
+    };
+
+    let topix = match Topix::new(&client).await {
+        Ok(res) => res,
+        Err(e) => {
+            error!("{}", e);
+            return Err(e);
+        }
+    };
+    topix.save_to_json_file().unwrap();
+
+    let nikkei225 = match crate::my_file_io::load_nikkei225_list() {
+        Ok(res) => res,
+        Err(e) => {
+            error!("{}", e);
+            return Err(e);
+        }
+    };
+    info!("Nikkei225 list has been loaded");
+
+    let config = crate::config::GdriveJson::new();
+    let unit = config.jquants_unit();
+    info!("unit: {}", unit);
+
+    info!("Starting Fetch Nikkei225");
+
+    for row in nikkei225 {
+        thread::sleep(Duration::from_secs(1));
+
+        let code = row.get_code();
+
+        let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
+            Ok(res) => res,
+            Err(e) => {
+                error!("{}", e);
+                return Err(e);
+            }
+        };
+
+        let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
+        let now = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let last_date = raw_ohlc.last().unwrap().get_date().to_string();
+        if now != last_date && !force {
+            error!("Not Latest Data");
+            return Err(MyError::NotLatestData);
+        }
+        match serde_json::to_string(&raw_ohlc) {
+            Ok(res) => {
+                let path =
+                    get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) }).unwrap();
+                std::fs::write(path, res).unwrap();
+            }
+            Err(e) => {
+                error!("{}", e);
+                return Err(MyError::Anyhow(anyhow!("{}", e)));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::Markdown, MyError> {
     let client = Client::new();
 
@@ -494,7 +575,7 @@ pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::
             return Err(e);
         }
     };
-    info!("Nikkei225 has been loaded");
+    info!("Nikkei225 list has been loaded");
 
     let config = crate::config::GdriveJson::new();
     let unit = config.jquants_unit();
@@ -551,7 +632,7 @@ pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::
     Ok(stocks_daytrading_list.output_for_markdown(&today))
 }
 
-pub async fn _fetch_nikkei225(force: bool) -> Result<(), MyError> {
+pub async fn _fetch_nikkei225_old(force: bool) -> Result<(), MyError> {
     let client = Client::new();
 
     info!("Starting First Fetch");

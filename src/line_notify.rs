@@ -3,7 +3,7 @@ use std::{thread, time::Duration};
 use crate::database::stocks::Output;
 use log::{error, info};
 
-async fn send_message(message: &str) {
+pub async fn send_message(message: &str) {
     let client = reqwest::Client::new();
     let url = "https://notify-api.line.me/api/notify";
     let config = crate::config::GdriveJson::new();
