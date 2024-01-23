@@ -66,6 +66,8 @@ async fn main() {
                 // live
                 (false, false) => match args.afternoon {
                     true => {
+                        line_notify::send_message("Afternoon process, start").await;
+
                         let client = reqwest::Client::new();
                         let prices_am = jquants::live::PricesAm::new(&client).await.unwrap();
                         let aaa = analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(
@@ -77,6 +79,8 @@ async fn main() {
                         line_notify::send_message("Afternoon process, success").await;
                     }
                     false => {
+                        line_notify::send_message("Next day process, start").await;
+
                         match jquants::live::fetch_nikkei225(args.force).await {
                             Ok(output) => {
                                 info!("fetch_nikkei225 success");

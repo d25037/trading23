@@ -344,7 +344,7 @@ impl DailyQuotes {
 
         let query = json!({"code": code});
 
-        info!("Fetch Daily OHLC");
+        info!("Fetch Daily OHLC, code: {}", code);
         let res = client
             .get(url)
             .query(&query)
