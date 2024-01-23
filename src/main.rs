@@ -48,6 +48,8 @@ struct MyArgs {
     code: Option<i32>,
     #[arg(long)]
     force: bool,
+    #[arg(long)]
+    afternoon: bool,
 }
 
 #[tokio::main]
@@ -62,44 +64,49 @@ async fn main() {
         Commands::Stocks(args) => {
             match (args.backtest, args.testrun) {
                 // live
-                (false, false) => {
-                    // match jquants::live::fetch_nikkei225(args.force).await {
-                    //     Ok(_) => info!("fetch_nikkei225 success"),
-                    //     Err(e) => match e {
-                    //         my_error::MyError::NotLatestData => return error!("{}", e),
-                    //         _ => return error!("fetch_nikkei225 failed: {}", e),
-                    //     },
-                    // };
+                (false, false) => match args.afternoon {
+                    true => {
+                        let client = reqwest::Client::new();
+                        let prices_am = jquants::live::PricesAm::new(&client).await.unwrap();
+                        let aaa = analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(
+                            &prices_am,
+                        )
+                        .unwrap();
 
-                    // let conn = database::stocks::open_db().unwrap();
-                    // let output = database::stocks::select_stocks(&conn, None);
-                    // line_notify::send_message_from_jquants_output(output).await;
-                    match jquants::live::fetch_nikkei225(args.force).await {
-                        Ok(output) => {
-                            info!("fetch_nikkei225 success");
-                            output
-                        }
-                        Err(e) => match e {
-                            my_error::MyError::NotLatestData => return error!("{}", e),
-                            _ => return error!("fetch_nikkei225 failed: {}", e),
-                        },
-                    };
+                        aaa.for_afternoon_strategy().unwrap();
+                        line_notify::send_message("Afternoon process, success").await;
+                    }
+                    false => {
+                        match jquants::live::fetch_nikkei225(args.force).await {
+                            Ok(output) => {
+                                info!("fetch_nikkei225 success");
+                                output
+                            }
+                            Err(e) => match e {
+                                my_error::MyError::NotLatestData => return error!("{}", e),
+                                _ => return error!("fetch_nikkei225 failed: {}", e),
+                            },
+                        };
 
-                    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-                    let day_before_5 = chrono::Local::now()
-                        .checked_sub_signed(chrono::Duration::days(5))
-                        .unwrap()
-                        .format("%Y-%m-%d")
-                        .to_string();
+                        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                        let day_before_5 = chrono::Local::now()
+                            .checked_sub_signed(chrono::Duration::days(5))
+                            .unwrap()
+                            .format("%Y-%m-%d")
+                            .to_string();
 
-                    let stocks_window_list =
-                        analysis::stocks_window::create_stocks_window_list(&day_before_5, &today)
+                        let stocks_window_list =
+                            analysis::stocks_window::create_stocks_window_list(
+                                &day_before_5,
+                                &today,
+                            )
                             .await
                             .unwrap();
-                    stocks_window_list.bbb().unwrap();
+                        stocks_window_list.for_cloud_strategy().unwrap();
 
-                    line_notify::send_message("success").await;
-                }
+                        line_notify::send_message("Next day process, success").await;
+                    }
+                },
 
                 // backtesting
                 (true, false) => {
@@ -145,8 +152,8 @@ async fn main() {
                     //     .await
                     //     .unwrap();
 
-                    let from = "2024-01-15";
-                    let to = "2024-01-18";
+                    let from = "2023-12-01";
+                    let to = "2024-01-22";
                     // let mut break_output =
                     //     analysis::stocks_daytrading::async_exec(someday, someday)
                     //         .await
@@ -162,7 +169,17 @@ async fn main() {
                             .await
                             .unwrap();
 
-                    stocks_window_list.bbb().unwrap();
+                    // stocks_window_list.ccc().unwrap();
+
+                    let client = reqwest::Client::new();
+                    let prices_am = jquants::live::PricesAm::new(&client).await.unwrap();
+                    let aaa =
+                        analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(&prices_am)
+                            .unwrap();
+
+                    aaa.for_afternoon_strategy().unwrap();
+
+                    // analysis::stocks_window::mean_analysis(stocks_window_list, from, to)
                 }
 
                 _ => {}

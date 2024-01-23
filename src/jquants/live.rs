@@ -297,39 +297,39 @@ impl TopixInner {
     }
 }
 
-pub async fn fetch_daily_quotes(client: &Client, code: i32) -> Result<DailyQuotes, MyError> {
-    let config = crate::config::GdriveJson::new();
-    let id_token = config.jquants_id_token();
-    let url = "https://api.jquants.com/v1/prices/daily_quotes";
+// pub async fn fetch_daily_quotes(client: &Client, code: i32) -> Result<DailyQuotes, MyError> {
+//     let config = crate::config::GdriveJson::new();
+//     let id_token = config.jquants_id_token();
+//     let url = "https://api.jquants.com/v1/prices/daily_quotes";
 
-    let query = json!({"code": code});
+//     let query = json!({"code": code});
 
-    // info!("Fetch Daily OHLC");
-    let res = client
-        .get(url)
-        .query(&query)
-        .bearer_auth(id_token)
-        .send()
-        .await?;
+//     // info!("Fetch Daily OHLC");
+//     let res = client
+//         .get(url)
+//         .query(&query)
+//         .bearer_auth(id_token)
+//         .send()
+//         .await?;
 
-    match res.status() {
-        StatusCode::OK => {
-            info!("Status code: {}, code: {}", res.status(), code);
-            let daily_quotes = res.json::<DailyQuotes>().await?;
-            Ok(daily_quotes)
-        }
-        StatusCode::UNAUTHORIZED => {
-            let body = res.text().await?;
-            info!("Status code 401 {}", body);
-            Err(MyError::IdTokenExpired(body))
-        }
-        _ => Err(MyError::Anyhow(anyhow!(
-            "Status code: {}, {}",
-            res.status(),
-            res.text().await?
-        ))),
-    }
-}
+//     match res.status() {
+//         StatusCode::OK => {
+//             info!("Status code: {}, code: {}", res.status(), code);
+//             let daily_quotes = res.json::<DailyQuotes>().await?;
+//             Ok(daily_quotes)
+//         }
+//         StatusCode::UNAUTHORIZED => {
+//             let body = res.text().await?;
+//             info!("Status code 401 {}", body);
+//             Err(MyError::IdTokenExpired(body))
+//         }
+//         _ => Err(MyError::Anyhow(anyhow!(
+//             "Status code: {}, {}",
+//             res.status(),
+//             res.text().await?
+//         ))),
+//     }
+// }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct DailyQuotes {
@@ -337,6 +337,42 @@ pub struct DailyQuotes {
 }
 
 impl DailyQuotes {
+    pub async fn new(client: &Client, code: i32) -> Result<Self, MyError> {
+        let config = crate::config::GdriveJson::new();
+        let id_token = config.jquants_id_token();
+        let url = "https://api.jquants.com/v1/prices/daily_quotes";
+
+        let query = json!({"code": code});
+
+        info!("Fetch Daily OHLC");
+        let res = client
+            .get(url)
+            .query(&query)
+            .bearer_auth(id_token)
+            .send()
+            .await?;
+
+        match res.status() {
+            StatusCode::OK => {
+                info!("Status code: {}", res.status());
+                let body = res.text().await?;
+                debug!("{}", body);
+                let json = serde_json::from_str::<DailyQuotes>(&body).unwrap();
+                Ok(json)
+            }
+            StatusCode::UNAUTHORIZED => {
+                let body = res.text().await?;
+                info!("Status code 401 {}", body);
+                Err(MyError::IdTokenExpired(body))
+            }
+            _ => Err(MyError::Anyhow(anyhow!(
+                "Status code: {}, {}",
+                res.status(),
+                res.text().await?
+            ))),
+        }
+    }
+
     pub fn get_ohlc(self) -> Vec<Ohlc> {
         let mut ohlc_vec = Vec::new();
         for jquants_ohlc in self.daily_quotes {
@@ -456,6 +492,74 @@ pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingC
     }
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct PricesAm {
+    prices_am: Vec<PricesAmInner>,
+}
+
+impl PricesAm {
+    pub async fn new(client: &Client) -> Result<Self, MyError> {
+        let config = crate::config::GdriveJson::new();
+        let id_token = config.jquants_id_token();
+        let url = "https://api.jquants.com/v1/prices/prices_am";
+
+        info!("Fetch Daily OHLC");
+        let res = client.get(url).bearer_auth(id_token).send().await?;
+
+        match res.status() {
+            StatusCode::OK => {
+                info!("Status code: {}", res.status());
+                let body = res.text().await?;
+                let json = serde_json::from_str::<PricesAm>(&body).unwrap();
+                info!("{:?}", json);
+                Ok(json)
+            }
+            StatusCode::UNAUTHORIZED => {
+                let body = res.text().await?;
+                info!("Status code 401 {}", body);
+                Err(MyError::IdTokenExpired(body))
+            }
+            _ => Err(MyError::Anyhow(anyhow!(
+                "Status code: {}, {}",
+                res.status(),
+                res.text().await?
+            ))),
+        }
+    }
+
+    pub fn get_stock_ohlc(&self, code: i32) -> Option<(f64, f64)> {
+        let code = {
+            let str = code.to_string();
+            str + "0"
+        };
+        self.prices_am
+            .iter()
+            .filter(|x| x.code == code)
+            .map(|x| (x.morning_open.unwrap(), x.morning_close.unwrap()))
+            .next()
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct PricesAmInner {
+    #[serde(rename = "Date")]
+    date: String,
+    #[serde(rename = "Code")]
+    code: String,
+    #[serde(rename = "MorningOpen")]
+    morning_open: Option<f64>,
+    #[serde(rename = "MorningHigh")]
+    morning_high: Option<f64>,
+    #[serde(rename = "MorningLow")]
+    morning_low: Option<f64>,
+    #[serde(rename = "MorningClose")]
+    morning_close: Option<f64>,
+    #[serde(rename = "MorningVolume")]
+    morning_volume: Option<f64>,
+    #[serde(rename = "MorningTurnoverValue")]
+    morning_turnover_value: Option<f64>,
+}
+
 pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
     let client = Client::new();
 
@@ -507,7 +611,7 @@ pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
 
         let code = row.get_code();
 
-        let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
+        let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
             Ok(res) => res,
             Err(e) => {
                 error!("{}", e);
@@ -588,7 +692,7 @@ pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::
 
         let code = row.get_code();
 
-        let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
+        let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
             Ok(res) => res,
             Err(e) => {
                 error!("{}", e);
@@ -672,7 +776,7 @@ pub async fn _fetch_nikkei225_old(force: bool) -> Result<(), MyError> {
         let code = row.get_code();
         let name = row.get_name();
 
-        let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
+        let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
             Ok(res) => res,
             Err(e) => {
                 error!("{}", e);
@@ -717,7 +821,7 @@ pub async fn fetch_daily_quotes_once(client: &Client, code: i32) -> Result<Strin
     }
 
     info!("Fetch Daily Quotes");
-    let daily_quotes: DailyQuotes = match fetch_daily_quotes(client, code).await {
+    let daily_quotes: DailyQuotes = match DailyQuotes::new(client, code).await {
         Ok(res) => res,
         Err(e) => {
             error!("{}", e);

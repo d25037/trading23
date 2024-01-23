@@ -1,4 +1,4 @@
-use super::live::{fetch_daily_quotes, first_fetch, DailyQuotes};
+use super::live::{first_fetch, DailyQuotes};
 use crate::analysis::backtesting::BacktestAnalyzer;
 use crate::analysis::live::Ohlc;
 use crate::my_error::MyError;
@@ -37,7 +37,7 @@ pub async fn fetch_ohlcs_and_save() -> Result<(), MyError> {
 
         let code = row.get_code();
 
-        let daily_quotes: DailyQuotes = match fetch_daily_quotes(&client, code).await {
+        let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
             Ok(res) => res,
             Err(e) => {
                 error!("{}", e);

@@ -114,6 +114,23 @@ pub fn get_jquants_window_path(file_name: &str) -> Result<PathBuf, MyError> {
 
     Ok(backtest_json_parent_dir_path.join(file_name))
 }
+pub fn get_jquants_cloud_path(file_name: &str) -> Result<PathBuf, MyError> {
+    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
+        .join("trading23")
+        .join("jquants_cloud");
+
+    Ok(backtest_json_parent_dir_path.join(file_name))
+}
+
+pub fn get_jquants_afternoon_path(file_name: &str) -> Result<PathBuf, MyError> {
+    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
+        .join("trading23")
+        .join("jquants_afternoon");
+
+    Ok(backtest_json_parent_dir_path.join(file_name))
+}
 
 #[cfg(test)]
 mod tests {
