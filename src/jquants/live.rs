@@ -1,10 +1,8 @@
-use crate::analysis::live::{Ohlc, OhlcAnalyzer, OhlcPremium};
-use crate::analysis::{backtesting_topix, stocks_daytrading};
+use crate::analysis::live::{Ohlc, OhlcPremium};
+use crate::config::GdriveJson;
 use crate::my_error::MyError;
 use crate::my_file_io::{get_fetched_ohlc_file_path, AssetType};
-use crate::{markdown, my_file_io};
 use anyhow::{anyhow, Result};
-use chrono::Duration as ChronoDuration;
 use log::error;
 use log::{debug, info};
 use reqwest::{Client, StatusCode};
@@ -20,6 +18,44 @@ struct RefreshToken {
     #[serde(rename = "refreshToken")]
     refresh_token: String,
 }
+impl RefreshToken {
+    async fn fetch_and_save_to_file(client: &Client) -> Result<(), MyError> {
+        info!("Fetch Refresh Token");
+        let mut gdrive_json = GdriveJson::new()?;
+
+        let mut map = HashMap::new();
+        map.insert("mailaddress", gdrive_json.jquants_mail());
+        map.insert("password", gdrive_json.jquants_pw());
+
+        let res = client
+            .post("https://api.jquants.com/v1/token/auth_user")
+            .json(&map)
+            .send()
+            .await?;
+
+        let (status, text) = {
+            let status = res.status();
+            let text = res.text().await?;
+            (status, text)
+        };
+
+        match status {
+            StatusCode::OK => {
+                info!("Status code: {}", status);
+                debug!("{}", text);
+                let refresh_token: RefreshToken = serde_json::from_str(&text)?;
+                gdrive_json.set_jquants_refresh_token(refresh_token.refresh_token);
+                gdrive_json.write_to_file()?;
+                Ok(())
+            }
+            _ => Err(MyError::Anyhow(anyhow!(
+                "Status code: {}, {}",
+                status,
+                text
+            ))),
+        }
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug)]
 struct IdToken {
@@ -27,76 +63,113 @@ struct IdToken {
     id_token: String,
 }
 
-async fn fetch_refresh_token(client: &Client) -> Result<(), MyError> {
-    info!("Fetch Refresh Token");
-    let mut config = crate::config::GdriveJson::new();
+impl IdToken {
+    async fn fetch_and_save_to_file(client: &Client) -> Result<(), MyError> {
+        info!("Fetch ID Token");
+        let mut gdrive_json = GdriveJson::new()?;
+        let url = "https://api.jquants.com/v1/token/auth_refresh";
+        let query = json!({"refreshtoken": gdrive_json.jquants_refresh_token()});
 
-    let mut map = HashMap::new();
-    map.insert("mailaddress", config.jquants_mail());
-    map.insert("password", config.jquants_pw());
+        let res = client.post(url).query(&query).send().await?;
 
-    let res = client
-        .post("https://api.jquants.com/v1/token/auth_user")
-        .json(&map)
-        .send()
-        .await?;
+        let (status, text) = {
+            let status = res.status();
+            let text = res.text().await?;
+            (status, text)
+        };
 
-    match res.status() {
-        StatusCode::OK => {
-            info!("Status code: {}", res.status());
-            let body = res.text().await?;
-            debug!("{}", body);
-            let refresh_token: RefreshToken = serde_json::from_str(&body)?;
-            config.set_jquants_refresh_token(refresh_token.refresh_token);
-            config.write_to_file();
-            info!("Overwrite the jquantsRefreshToken in the config.json file");
-            Ok(())
+        match status {
+            StatusCode::OK => {
+                info!("Status code: {}", status);
+                debug!("{}", text);
+                let id_token: IdToken = serde_json::from_str(&text)?;
+                gdrive_json.set_jquants_id_token(id_token.id_token);
+                gdrive_json.write_to_file()?;
+                Ok(())
+            }
+            StatusCode::BAD_REQUEST => {
+                info!("Status code 401 {}", text);
+                Err(MyError::RefreshTokenExpired)
+            }
+            _ => Err(MyError::Anyhow(anyhow!(
+                "Status code: {}, {}",
+                status,
+                text
+            ))),
         }
-        _ => Err(MyError::Anyhow(anyhow!(
-            "Status code: {}, {}",
-            res.status(),
-            res.text().await?
-        ))),
     }
 }
 
-async fn fetch_id_token(client: &Client) -> Result<(), MyError> {
-    info!("Fetch ID Token");
-    let mut config = crate::config::GdriveJson::new();
-    // debug!("{}", refresh_token);
+// async fn fetch_refresh_token(client: &Client) -> Result<(), MyError> {
+//     info!("Fetch Refresh Token");
+//     let mut config = crate::config::GdriveJson::new()?;
 
-    let url = "https://api.jquants.com/v1/token/auth_refresh";
-    let query = json!({"refreshtoken": config.jquants_refresh_token()});
+//     let mut map = HashMap::new();
+//     map.insert("mailaddress", config.jquants_mail());
+//     map.insert("password", config.jquants_pw());
 
-    let res = client.post(url).query(&query).send().await?;
+//     let res = client
+//         .post("https://api.jquants.com/v1/token/auth_user")
+//         .json(&map)
+//         .send()
+//         .await?;
 
-    match res.status() {
-        StatusCode::OK => {
-            info!("Status code: {}", res.status());
-            let body = res.text().await?;
-            debug!("{}", body);
-            let id_token: IdToken = serde_json::from_str(&body)?;
-            config.set_jquants_id_token(id_token.id_token);
-            config.write_to_file();
-            info!("Overwrite the jquantsIdToken in the config.json file");
-            Ok(())
-        }
-        StatusCode::BAD_REQUEST => {
-            let body = res.text().await?;
-            info!("Status code 401 {}", body);
-            Err(MyError::RefreshTokenExpired)
-        }
-        _ => Err(MyError::Anyhow(anyhow!(
-            "Status code: {}, {}",
-            res.status(),
-            res.text().await?
-        ))),
-    }
-}
+//     match res.status() {
+//         StatusCode::OK => {
+//             info!("Status code: {}", res.status());
+//             let body = res.text().await?;
+//             debug!("{}", body);
+//             let refresh_token: RefreshToken = serde_json::from_str(&body)?;
+//             config.set_jquants_refresh_token(refresh_token.refresh_token);
+//             config.write_to_file();
+//             info!("Overwrite the jquantsRefreshToken in the config.json file");
+//             Ok(())
+//         }
+//         _ => Err(MyError::Anyhow(anyhow!(
+//             "Status code: {}, {}",
+//             res.status(),
+//             res.text().await?
+//         ))),
+//     }
+// }
+
+// async fn fetch_id_token(client: &Client) -> Result<(), MyError> {
+//     info!("Fetch ID Token");
+//     let mut config = crate::config::GdriveJson::new()?;
+//     // debug!("{}", refresh_token);
+
+//     let url = "https://api.jquants.com/v1/token/auth_refresh";
+//     let query = json!({"refreshtoken": config.jquants_refresh_token()});
+
+//     let res = client.post(url).query(&query).send().await?;
+
+//     match res.status() {
+//         StatusCode::OK => {
+//             info!("Status code: {}", res.status());
+//             let body = res.text().await?;
+//             debug!("{}", body);
+//             let id_token: IdToken = serde_json::from_str(&body)?;
+//             config.set_jquants_id_token(id_token.id_token);
+//             config.write_to_file();
+//             info!("Overwrite the jquantsIdToken in the config.json file");
+//             Ok(())
+//         }
+//         StatusCode::BAD_REQUEST => {
+//             let body = res.text().await?;
+//             info!("Status code 401 {}", body);
+//             Err(MyError::RefreshTokenExpired)
+//         }
+//         _ => Err(MyError::Anyhow(anyhow!(
+//             "Status code: {}, {}",
+//             res.status(),
+//             res.text().await?
+//         ))),
+//     }
+// }
 
 #[allow(dead_code)]
 async fn fetch_listed_info(client: &Client, code: i32) -> Result<(), MyError> {
-    let id_token = env::var("JQUANTS_ID_TOKEN").unwrap();
+    let id_token = env::var("JQUANTS_ID_TOKEN")?;
     let base_url = "https://api.jquants.com/v1/listed/info";
     let date = {
         let now = chrono::Local::now();
@@ -141,7 +214,7 @@ pub struct TradingCalender {
 
 impl TradingCalender {
     pub async fn new(client: &Client, from: Option<&str>) -> Result<Self, MyError> {
-        let config = crate::config::GdriveJson::new();
+        let config = crate::config::GdriveJson::new()?;
         let url = "https://api.jquants.com/v1/markets/trading_calendar";
         let today = {
             let now = chrono::Local::now();
@@ -159,23 +232,27 @@ impl TradingCalender {
             .send()
             .await?;
 
-        match res.status() {
+        let (status, text) = {
+            let status = res.status();
+            let text = res.text().await?;
+            (status, text)
+        };
+
+        match status {
             StatusCode::OK => {
-                info!("Status code: {}", res.status());
-                let body = res.text().await?;
-                let json = serde_json::from_str::<TradingCalender>(&body).unwrap();
+                info!("Status code: {}", status);
+                let json = serde_json::from_str::<TradingCalender>(&text)?;
                 info!("{:?}", json);
                 Ok(json)
             }
             StatusCode::UNAUTHORIZED => {
-                let body = res.text().await?;
-                info!("Status code 401 {}", body);
-                Err(MyError::IdTokenExpired(body))
+                info!("Status code 401 {}", text);
+                Err(MyError::IdTokenExpired(text))
             }
             _ => Err(MyError::Anyhow(anyhow!(
                 "Status code: {}, {}",
-                res.status(),
-                res.text().await?
+                status,
+                text
             ))),
         }
     }
@@ -208,41 +285,37 @@ pub struct Topix {
 }
 impl Topix {
     pub async fn new(client: &Client) -> Result<Self, MyError> {
-        let config = crate::config::GdriveJson::new();
+        let config = crate::config::GdriveJson::new()?;
         let id_token = config.jquants_id_token();
         let url = "https://api.jquants.com/v1/indices/topix";
 
         info!("Fetch Topix");
         let res = client.get(url).bearer_auth(id_token).send().await?;
 
-        match res.status() {
+        let (status, text) = {
+            let status = res.status();
+            let text = res.text().await?;
+            (status, text)
+        };
+
+        match status {
             StatusCode::OK => {
-                info!("Status code: {}", res.status());
-                let body = res.text().await?;
-                debug!("{}", body);
-                let json = serde_json::from_str::<Topix>(&body).unwrap();
+                info!("Status code: {}", status);
+                debug!("{}", text);
+                let json = serde_json::from_str::<Topix>(&text)?;
                 Ok(json)
             }
             StatusCode::UNAUTHORIZED => {
-                let body = res.text().await?;
-                info!("Status code 401 {}", body);
-                Err(MyError::IdTokenExpired(body))
+                info!("Status code 401 {}", text);
+                Err(MyError::IdTokenExpired(text))
             }
             _ => Err(MyError::Anyhow(anyhow!(
                 "Status code: {}, {}",
-                res.status(),
-                res.text().await?
+                status,
+                text
             ))),
         }
     }
-
-    // pub fn from_json_file() -> Result<Self, MyError> {
-    //     let path = crate::my_file_io::get_topix_ohlc_file_path().unwrap();
-    //     let file = File::open(path).unwrap();
-    //     let data: Vec<TopixInner> = serde_json::from_reader(file).unwrap();
-
-    //     Ok(Self { topix: data })
-    // }
 
     pub fn get_len_of_topix(&self) -> usize {
         self.topix.len()
@@ -259,9 +332,9 @@ impl Topix {
     }
 
     pub fn save_to_json_file(&self) -> Result<(), MyError> {
-        let path = crate::my_file_io::get_topix_ohlc_file_path().unwrap();
-        let file = File::create(&path).unwrap();
-        serde_json::to_writer(file, &self).unwrap();
+        let path = crate::my_file_io::get_topix_ohlc_file_path()?;
+        let file = File::create(&path)?;
+        serde_json::to_writer(file, &self)?;
         info!("Topix has been saved, path: {:?}", path);
         Ok(())
     }
@@ -305,7 +378,7 @@ pub struct DailyQuotes {
 
 impl DailyQuotes {
     pub async fn new(client: &Client, code: i32) -> Result<Self, MyError> {
-        let config = crate::config::GdriveJson::new();
+        let config = crate::config::GdriveJson::new()?;
         let id_token = config.jquants_id_token();
         let url = "https://api.jquants.com/v1/prices/daily_quotes";
 
@@ -319,23 +392,27 @@ impl DailyQuotes {
             .send()
             .await?;
 
-        match res.status() {
+        let (status, text) = {
+            let status = res.status();
+            let text = res.text().await?;
+            (status, text)
+        };
+
+        match status {
             StatusCode::OK => {
-                info!("Status code: {}", res.status());
-                let body = res.text().await?;
-                debug!("{}", body);
-                let json = serde_json::from_str::<DailyQuotes>(&body).unwrap();
+                info!("Status code: {}", status);
+                debug!("{}", text);
+                let json = serde_json::from_str::<DailyQuotes>(&text)?;
                 Ok(json)
             }
             StatusCode::UNAUTHORIZED => {
-                let body = res.text().await?;
-                info!("Status code 401 {}", body);
-                Err(MyError::IdTokenExpired(body))
+                info!("Status code 401 {}", text);
+                Err(MyError::IdTokenExpired(text))
             }
             _ => Err(MyError::Anyhow(anyhow!(
                 "Status code: {}, {}",
-                res.status(),
-                res.text().await?
+                status,
+                text
             ))),
         }
     }
@@ -352,10 +429,10 @@ impl DailyQuotes {
             }
             let jquants_ohlc = Ohlc::new(
                 jquants_ohlc.date,
-                jquants_ohlc.open.unwrap(),
-                jquants_ohlc.high.unwrap(),
-                jquants_ohlc.low.unwrap(),
-                jquants_ohlc.close.unwrap(),
+                jquants_ohlc.open.expect("Expected open to be Some"),
+                jquants_ohlc.high.expect("Expected high to be Some"),
+                jquants_ohlc.low.expect("Expected low to be Some"),
+                jquants_ohlc.close.expect("Expected close to be Some"),
             );
             ohlc_vec.push(jquants_ohlc);
         }
@@ -376,12 +453,16 @@ impl DailyQuotes {
             }
             let jquants_ohlc = OhlcPremium::new(
                 jquants_ohlc.date,
-                jquants_ohlc.open.unwrap(),
-                jquants_ohlc.high.unwrap(),
-                jquants_ohlc.low.unwrap(),
-                jquants_ohlc.close.unwrap(),
-                jquants_ohlc.morning_close.unwrap(),
-                jquants_ohlc.afternoon_open.unwrap(),
+                jquants_ohlc.open.expect("Expected open to be Some"),
+                jquants_ohlc.high.expect("Expected high to be Some"),
+                jquants_ohlc.low.expect("Expected low to be Some"),
+                jquants_ohlc.close.expect("Expected close to be Some"),
+                jquants_ohlc
+                    .morning_close
+                    .expect("Expected morning_close to be Some"),
+                jquants_ohlc
+                    .afternoon_open
+                    .expect("Expected afternoon_open to be Some"),
             );
             ohlc_vec.push(jquants_ohlc);
         }
@@ -431,32 +512,36 @@ struct DailyQuotesInner {
 
 pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingCalender, MyError> {
     match TradingCalender::new(client, from).await {
-        Ok(json) => Ok(json),
+        Ok(res) => return Ok(res),
         Err(MyError::IdTokenExpired(_)) => {
-            info!("ID token expired, attempting to fetch a new one...");
-            match fetch_id_token(client).await {
-                Ok(_) => TradingCalender::new(client, from).await,
-                Err(MyError::RefreshTokenExpired) => {
-                    info!("Refresh token expired, attempting to fetch a new one...");
-                    match fetch_refresh_token(client).await {
-                        Ok(_) => {
-                            info!("Refresh token has been updated. Attempting to fetch a new ID token...");
-                            match fetch_id_token(client).await {
-                                Ok(_) => {
-                                    info!("ID token has been updated. Attempting to fetch a new Trading Calender...");
-                                    TradingCalender::new(client, from).await
-                                }
-                                Err(e) => Err(e),
-                            }
-                        }
-                        Err(e) => Err(e),
-                    }
-                }
-                Err(e) => Err(e),
-            }
+            info!("ID token expired, attempting to fetch a new one...")
         }
-        Err(e) => Err(e),
+        Err(e) => return Err(e),
+    };
+
+    match IdToken::fetch_and_save_to_file(client).await {
+        Ok(_) => return TradingCalender::new(client, from).await,
+        Err(MyError::RefreshTokenExpired) => {
+            info!("Refresh token expired, attempting to fetch a new one...")
+        }
+        Err(e) => return Err(e),
     }
+
+    match RefreshToken::fetch_and_save_to_file(client).await {
+        Ok(_) => {
+            info!("Refresh token has been updated. Attempting to fetch a new ID token...")
+        }
+        Err(e) => return Err(e),
+    }
+
+    match IdToken::fetch_and_save_to_file(client).await {
+        Ok(_) => {
+            info!("ID token has been updated. Attempting to fetch a new Trading Calender...");
+        }
+        Err(e) => return Err(e),
+    }
+
+    TradingCalender::new(client, from).await
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -466,7 +551,7 @@ pub struct PricesAm {
 
 impl PricesAm {
     pub async fn new(client: &Client) -> Result<Self, MyError> {
-        let config = crate::config::GdriveJson::new();
+        let config = crate::config::GdriveJson::new()?;
         let id_token = config.jquants_id_token();
         let url = "https://api.jquants.com/v1/prices/prices_am";
 
@@ -477,7 +562,7 @@ impl PricesAm {
             StatusCode::OK => {
                 info!("Status code: {}", res.status());
                 let body = res.text().await?;
-                let json = serde_json::from_str::<PricesAm>(&body).unwrap();
+                let json = serde_json::from_str::<PricesAm>(&body)?;
                 debug!("{:?}", json);
 
                 Ok(json)
@@ -503,7 +588,12 @@ impl PricesAm {
         self.prices_am
             .iter()
             .filter(|x| x.code == code)
-            .map(|x| (x.morning_open.unwrap(), x.morning_close.unwrap()))
+            .map(|x| {
+                (
+                    x.morning_open.expect("Expected morning_open to be Some"),
+                    x.morning_close.expect("Expected morning_close to be Some"),
+                )
+            })
             .next()
     }
 }
@@ -533,42 +623,24 @@ pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
 
     info!("Starting First Fetch");
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    match first_fetch(&client, Some(&today)).await {
-        Ok(res) => match res.is_today_trading_day() {
-            true => info!("Today is Trading Day"),
-            false => match force {
-                true => info!("Today is Holiday, but force is true"),
-                false => {
-                    error!("Today is Holiday");
-                    return Err(MyError::Holiday);
-                }
-            },
-        },
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
+
+    let first_fetched = first_fetch(&client, Some(&today)).await?;
+    match (first_fetched.is_today_trading_day(), force) {
+        (true, _) => info!("Today is Trading Day"),
+        (false, true) => info!("Today is Holiday, but force is true"),
+        (false, false) => {
+            error!("Today is Holiday");
+            return Err(MyError::Holiday);
         }
     };
 
-    let topix = match Topix::new(&client).await {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
-    topix.save_to_json_file().unwrap();
+    let topix = Topix::new(&client).await?;
+    topix.save_to_json_file()?;
 
-    let nikkei225 = match crate::my_file_io::load_nikkei225_list() {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
+    let nikkei225 = crate::my_file_io::load_nikkei225_list()?;
     info!("Nikkei225 list has been loaded");
 
-    let config = crate::config::GdriveJson::new();
+    let config = crate::config::GdriveJson::new()?;
     let unit = config.jquants_unit();
     info!("unit: {}", unit);
 
@@ -579,238 +651,235 @@ pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
 
         let code = row.get_code();
 
-        let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{}", e);
-                return Err(e);
-            }
-        };
+        let daily_quotes: DailyQuotes = DailyQuotes::new(&client, code).await?;
 
         let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
         let now = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let last_date = raw_ohlc.last().unwrap().get_date().to_string();
+        let last_date = raw_ohlc
+            .last()
+            .expect("Expected raw_ohlc to be Some")
+            .get_date()
+            .to_string();
         if now != last_date && !force {
             error!("Not Latest Data");
             return Err(MyError::NotLatestData);
         }
-        match serde_json::to_string(&raw_ohlc) {
-            Ok(res) => {
-                let path =
-                    get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) }).unwrap();
-                std::fs::write(path, res).unwrap();
-            }
-            Err(e) => {
-                error!("{}", e);
-                return Err(MyError::Anyhow(anyhow!("{}", e)));
-            }
-        }
+
+        let raw_ohlc_serialized = serde_json::to_string(&raw_ohlc)?;
+        let path = get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) })?;
+        std::fs::write(path, raw_ohlc_serialized)?;
     }
     Ok(())
 }
 
-pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::Markdown, MyError> {
-    let client = Client::new();
+// pub async fn fetch_nikkei225_daytrading(force: bool) -> Result<crate::markdown::Markdown, MyError> {
+//     let client = Client::new();
 
-    info!("Starting First Fetch");
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    match first_fetch(&client, Some(&today)).await {
-        Ok(res) => match res.is_today_trading_day() {
-            true => info!("Today is Trading Day"),
-            false => match force {
-                true => info!("Today is Holiday, but force is true"),
-                false => {
-                    error!("Today is Holiday");
-                    return Err(MyError::Holiday);
-                }
-            },
-        },
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
+//     info!("Starting First Fetch");
+//     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+//     match first_fetch(&client, Some(&today)).await {
+//         Ok(res) => match res.is_today_trading_day() {
+//             true => info!("Today is Trading Day"),
+//             false => match force {
+//                 true => info!("Today is Holiday, but force is true"),
+//                 false => {
+//                     error!("Today is Holiday");
+//                     return Err(MyError::Holiday);
+//                 }
+//             },
+//         },
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
 
-    let topix = match Topix::new(&client).await {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
-    topix.save_to_json_file().unwrap();
+//     let topix = match Topix::new(&client).await {
+//         Ok(res) => res,
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
+//     topix.save_to_json_file()?;
 
-    let nikkei225 = match crate::my_file_io::load_nikkei225_list() {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
-    info!("Nikkei225 list has been loaded");
+//     let nikkei225 = match crate::my_file_io::load_nikkei225_list() {
+//         Ok(res) => res,
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
+//     info!("Nikkei225 list has been loaded");
 
-    let config = crate::config::GdriveJson::new();
-    let unit = config.jquants_unit();
-    info!("unit: {}", unit);
+//     let config = crate::config::GdriveJson::new();
+//     let unit = config.jquants_unit();
+//     info!("unit: {}", unit);
 
-    info!("Starting Fetch Nikkei225");
+//     info!("Starting Fetch Nikkei225");
 
-    for row in nikkei225 {
-        thread::sleep(Duration::from_secs(1));
+//     for row in nikkei225 {
+//         thread::sleep(Duration::from_secs(1));
 
-        let code = row.get_code();
+//         let code = row.get_code();
 
-        let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{}", e);
-                return Err(e);
-            }
-        };
+//         let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
+//             Ok(res) => res,
+//             Err(e) => {
+//                 error!("{}", e);
+//                 return Err(e);
+//             }
+//         };
 
-        let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
-        let now = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let last_date = raw_ohlc.last().unwrap().get_date().to_string();
-        if now != last_date && !force {
-            error!("Not Latest Data");
-            return Err(MyError::NotLatestData);
-        }
-        match serde_json::to_string(&raw_ohlc) {
-            Ok(res) => {
-                let path =
-                    get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) }).unwrap();
-                std::fs::write(path, res).unwrap();
-            }
-            Err(e) => {
-                error!("{}", e);
-                return Err(MyError::Anyhow(anyhow!("{}", e)));
-            }
-        }
-    }
+//         let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
+//         let now = chrono::Local::now().format("%Y-%m-%d").to_string();
+//         let last_date = raw_ohlc
+//             .last()
+//             .expect("Expected raw_ohlc to be Some")
+//             .get_date()
+//             .to_string();
+//         if now != last_date && !force {
+//             error!("Not Latest Data");
+//             return Err(MyError::NotLatestData);
+//         }
+//         match serde_json::to_string(&raw_ohlc) {
+//             Ok(res) => {
+//                 let path = get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) })?;
+//                 std::fs::write(path, res)?;
+//             }
+//             Err(e) => {
+//                 error!("{}", e);
+//                 return Err(MyError::Anyhow(anyhow!("{}", e)));
+//             }
+//         }
+//     }
 
-    let mut stocks_daytrading_list = match stocks_daytrading::async_exec(&today, &today).await {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
-    stocks_daytrading_list.sort_by_standardized_diff();
+//     let mut stocks_daytrading_list = match stocks_daytrading::async_exec(&today, &today).await {
+//         Ok(res) => res,
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
+//     stocks_daytrading_list.sort_by_standardized_diff();
 
-    let markdown = stocks_daytrading_list.output_for_markdown(&today);
-    let markdown_path = crate::my_file_io::get_jquants_break_path(&today).unwrap();
-    markdown.write_to_file(&markdown_path);
+//     let markdown = stocks_daytrading_list.output_for_markdown(&today);
+//     let markdown_path = crate::my_file_io::get_jquants_break_path(&today)?;
+//     markdown.write_to_file(&markdown_path);
 
-    Ok(stocks_daytrading_list.output_for_markdown(&today))
-}
+//     Ok(stocks_daytrading_list.output_for_markdown(&today))
+// }
 
-pub async fn _fetch_nikkei225_old(force: bool) -> Result<(), MyError> {
-    let client = Client::new();
+// pub async fn _fetch_nikkei225_old(force: bool) -> Result<(), MyError> {
+//     let client = Client::new();
 
-    info!("Starting First Fetch");
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    match first_fetch(&client, Some(&today)).await {
-        Ok(res) => match res.is_today_trading_day() {
-            true => info!("Today is Trading Day"),
-            false => {
-                error!("Today is Holiday");
-                return Err(MyError::Holiday);
-            }
-        },
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
+//     info!("Starting First Fetch");
+//     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+//     match first_fetch(&client, Some(&today)).await {
+//         Ok(res) => match res.is_today_trading_day() {
+//             true => info!("Today is Trading Day"),
+//             false => {
+//                 error!("Today is Holiday");
+//                 return Err(MyError::Holiday);
+//             }
+//         },
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
 
-    let nikkei225 = match crate::my_file_io::load_nikkei225_list() {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
-    info!("Nikkei225 has been loaded");
+//     let nikkei225 = match crate::my_file_io::load_nikkei225_list() {
+//         Ok(res) => res,
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
+//     info!("Nikkei225 has been loaded");
 
-    let config = crate::config::GdriveJson::new();
-    let unit = config.jquants_unit();
-    info!("unit: {}", unit);
+//     let config = crate::config::GdriveJson::new();
+//     let unit = config.jquants_unit();
+//     info!("unit: {}", unit);
 
-    info!("Starting Fetch Nikkei225");
+//     info!("Starting Fetch Nikkei225");
 
-    for row in nikkei225 {
-        thread::sleep(Duration::from_secs(1));
+//     for row in nikkei225 {
+//         thread::sleep(Duration::from_secs(1));
 
-        let code = row.get_code();
-        let name = row.get_name();
+//         let code = row.get_code();
+//         let name = row.get_name();
 
-        let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{}", e);
-                return Err(e);
-            }
-        };
+//         let daily_quotes: DailyQuotes = match DailyQuotes::new(&client, code).await {
+//             Ok(res) => res,
+//             Err(e) => {
+//                 error!("{}", e);
+//                 return Err(e);
+//             }
+//         };
 
-        let raw_ohlc: Vec<Ohlc> = daily_quotes.get_ohlc();
-        let now = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let last_date = raw_ohlc.last().unwrap().get_date().to_string();
-        if now != last_date && !force {
-            error!("Not Latest Data");
-            return Err(MyError::NotLatestData);
-        }
-        match serde_json::to_string(&raw_ohlc) {
-            Ok(res) => {
-                let path =
-                    get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) }).unwrap();
-                std::fs::write(path, res).unwrap();
-            }
-            Err(e) => {
-                error!("{}", e);
-                return Err(MyError::Anyhow(anyhow!("{}", e)));
-            }
-        }
+//         let raw_ohlc: Vec<Ohlc> = daily_quotes.get_ohlc();
+//         let now = chrono::Local::now().format("%Y-%m-%d").to_string();
+//         let last_date = raw_ohlc
+//             .last()
+//             .expect("Expected raw_ohlc to be Some")
+//             .get_date()
+//             .to_string();
+//         if now != last_date && !force {
+//             error!("Not Latest Data");
+//             return Err(MyError::NotLatestData);
+//         }
+//         match serde_json::to_string(&raw_ohlc) {
+//             Ok(res) => {
+//                 let path = get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) })?;
+//                 std::fs::write(path, res)?;
+//             }
+//             Err(e) => {
+//                 error!("{}", e);
+//                 return Err(MyError::Anyhow(anyhow!("{}", e)));
+//             }
+//         }
 
-        let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
+//         let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
 
-        let conn = crate::database::stocks::open_db().unwrap();
-        let new_stock = crate::database::stocks::NewStock::new(code, name, ohlc_analyzer);
-        new_stock.insert_record(&conn, unit);
-    }
-    Ok(())
-}
+//         let conn = crate::database::stocks::open_db()?;
+//         let new_stock = crate::database::stocks::NewStock::new(code, name, ohlc_analyzer);
+//         new_stock.insert_record(&conn, unit);
+//     }
+//     Ok(())
+// }
 
-pub async fn fetch_daily_quotes_once(client: &Client, code: i32) -> Result<String, MyError> {
-    info!("Starting Ohlc Fetch once");
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    if let Err(e) = first_fetch(client, Some(&today)).await {
-        error!("{}", e);
-        return Err(e);
-    }
+// pub async fn fetch_daily_quotes_once(client: &Client, code: i32) -> Result<String, MyError> {
+//     info!("Starting Ohlc Fetch once");
+//     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+//     if let Err(e) = first_fetch(client, Some(&today)).await {
+//         error!("{}", e);
+//         return Err(e);
+//     }
 
-    info!("Fetch Daily Quotes");
-    let daily_quotes: DailyQuotes = match DailyQuotes::new(client, code).await {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
+//     info!("Fetch Daily Quotes");
+//     let daily_quotes: DailyQuotes = match DailyQuotes::new(client, code).await {
+//         Ok(res) => res,
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
 
-    let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
-    let last_data = raw_ohlc.last().unwrap();
-    let last_date = last_data.get_date().to_string();
-    info!("last_data: {:?}", last_data);
-    // let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
+//     let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
+//     let last_data = raw_ohlc.last().expect("Expected raw_ohlc to be Some");
+//     let last_date = last_data.get_date().to_string();
+//     info!("last_data: {:?}", last_data);
+//     // let ohlc_analyzer = OhlcAnalyzer::from_jquants(raw_ohlc);
 
-    // ohlc_analyzer.get_shorter_chart();
-    // info!(
-    //     "daily standardized diff: {}",
-    //     ohlc_analyzer.get_shorter_ohlc_standardized_diff()
-    // );
+//     // ohlc_analyzer.get_shorter_chart();
+//     // info!(
+//     //     "daily standardized diff: {}",
+//     //     ohlc_analyzer.get_shorter_ohlc_standardized_diff()
+//     // );
 
-    Ok(last_date)
-}
+//     Ok(last_date)
+// }
 
 // #[cfg(test)]
 // mod tests {

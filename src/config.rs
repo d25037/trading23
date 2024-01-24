@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::Path;
 
+use crate::my_error::MyError;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GdriveJson {
     #[serde(rename = "jquantsMail")]
@@ -23,28 +25,31 @@ pub struct GdriveJson {
 }
 
 impl GdriveJson {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, MyError> {
         let file_path = {
-            let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+            let gdrive_path = std::env::var("GDRIVE_PATH")?;
             Path::new(&gdrive_path)
                 .join("trading23")
                 .join("config.json")
         };
-        let file = File::open(file_path).unwrap();
+        let file = File::open(file_path)?;
 
-        serde_json::from_reader(file).unwrap()
+        let res = serde_json::from_reader(file)?;
+        Ok(res)
     }
 
-    pub fn write_to_file(&self) {
+    pub fn write_to_file(&self) -> Result<(), MyError> {
         let file_path = {
-            let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+            let gdrive_path = std::env::var("GDRIVE_PATH")?;
             Path::new(&gdrive_path)
                 .join("trading23")
                 .join("config.json")
         };
-        let file = File::create(file_path).unwrap();
+        let file = File::create(file_path)?;
 
-        serde_json::to_writer_pretty(file, self).unwrap();
+        serde_json::to_writer_pretty(file, self)?;
+
+        Ok(())
     }
 
     pub fn jquants_mail(&self) -> &str {

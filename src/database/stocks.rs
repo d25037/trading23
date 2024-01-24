@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::{env, fmt::Write, path::Path};
 
 pub fn open_db() -> Result<Connection> {
-    let gdrive_path = env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = env::var("GDRIVE_PATH")?;
     let sqlite_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("trading23.sqlite");

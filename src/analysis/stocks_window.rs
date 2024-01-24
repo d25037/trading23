@@ -529,7 +529,7 @@ impl StocksWindowList {
             stocks_window_list.sort_by_difference();
 
             let markdown = stocks_window_list.output_for_markdown(&date);
-            let path = crate::my_file_io::get_jquants_window_path(&date).unwrap();
+            let path = crate::my_file_io::get_jquants_window_path(&date)?;
             markdown.write_to_file(&path);
         }
 
@@ -554,7 +554,7 @@ impl StocksWindowList {
             on_the_cloud.sort_by_abs_latest_move();
 
             let markdown = on_the_cloud.output_for_markdown_cloud(&date);
-            let path = crate::my_file_io::get_jquants_cloud_path(&date).unwrap();
+            let path = crate::my_file_io::get_jquants_cloud_path(&date)?;
             markdown.write_to_file(&path);
         }
 
@@ -602,7 +602,7 @@ pub async fn create_stocks_window_list(from: &str, to: &str) -> Result<StocksWin
     };
     info!("Nikkei225 has been loaded");
 
-    let config = crate::config::GdriveJson::new();
+    let config = crate::config::GdriveJson::new()?;
     let unit = config.jquants_unit();
     info!("unit: {}", unit);
 

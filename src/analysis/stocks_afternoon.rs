@@ -146,7 +146,7 @@ impl StocksAfternoon {
         })
     }
 
-    fn markdown_body_output(&self) -> String {
+    fn markdown_body_output(&self) -> Result<String, MyError> {
         let mut buffer = String::new();
         let name = match self.name.chars().count() > 5 {
             true => {
@@ -194,10 +194,9 @@ impl StocksAfternoon {
             buffer,
             "ATR: {}, Unit: {}, Diff.: {}, Move: {}, 必要金額: {}円",
             self.atr, self.unit, self.standardized_diff, self.latest_move, self.required_amount
-        )
-        .unwrap();
+        )?;
 
-        buffer
+        Ok(buffer)
     }
 }
 
@@ -229,7 +228,7 @@ impl StocksAfternoonList {
         };
         info!("Nikkei225 has been loaded");
 
-        let config = crate::config::GdriveJson::new();
+        let config = crate::config::GdriveJson::new()?;
         let unit = config.jquants_unit();
         info!("unit: {}", unit);
 
@@ -320,41 +319,29 @@ impl StocksAfternoonList {
         StocksAfternoonList::from_vec(under_the_cloud.into_iter().cloned().collect())
     }
 
-    pub fn output_for_markdown_afternoon(&self, date: &str) -> Markdown {
+    pub fn output_for_markdown_afternoon(&self, date: &str) -> Result<Markdown, MyError> {
         let mut markdown = Markdown::new();
         markdown.h1(date);
 
-        for stocks_afternoon in self.data.iter().take(10) {
-            markdown.body(&stocks_afternoon.markdown_body_output());
+        for stocks_afternoon in self.data.iter().take(20) {
+            markdown.body(&stocks_afternoon.markdown_body_output()?)?;
         }
-
-        // let (long_morning_close, long_afternoon_close) = self.mean_on_the_cloud();
-        // markdown.body(&format!(
-        //     "<Above> MC_mean5: {}, AC_mean5: {}",
-        //     long_morning_close, long_afternoon_close
-        // ));
-
-        // let (short_morning_close, short_afternoon_close) = self.mean_under_the_cloud();
-        // markdown.body(&format!(
-        //     "<Below> MC_mean5: {}, AC_mean5: {}",
-        //     short_morning_close, short_afternoon_close
-        // ));
 
         info!("{}", markdown.buffer());
 
-        markdown
+        Ok(markdown)
     }
 
-    pub fn for_afternoon_strategy(&self) -> Result<(), MyError> {
+    pub fn for_afternoon_strategy(mut self) -> Result<(), MyError> {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let mut on_the_cloud = self.get_on_the_cloud();
-        on_the_cloud.append(self.get_between_the_cloud());
-        on_the_cloud.append(self.get_under_the_cloud());
+        // let mut on_the_cloud = self.get_on_the_cloud();
+        // on_the_cloud.append(self.get_between_the_cloud());
+        // on_the_cloud.append(self.get_under_the_cloud());
 
-        on_the_cloud.sort_by_abs_latest_move();
-        let markdown = on_the_cloud.output_for_markdown_afternoon(&today);
-        let path = crate::my_file_io::get_jquants_afternoon_path(&today).unwrap();
-        markdown.write_to_file(&path);
+        self.sort_by_abs_latest_move();
+        let markdown = self.output_for_markdown_afternoon(&today)?;
+        let path = crate::my_file_io::get_jquants_afternoon_path(&today)?;
+        markdown.write_to_file(&path)?;
 
         Ok(())
     }

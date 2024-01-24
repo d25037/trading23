@@ -1070,7 +1070,7 @@ pub async fn async_exec(from: &str, to: &str) -> Result<StocksDaytradingList, My
     };
     info!("Nikkei225 has been loaded");
 
-    let config = crate::config::GdriveJson::new();
+    let config = crate::config::GdriveJson::new()?;
     let unit = config.jquants_unit();
     info!("unit: {}", unit);
 

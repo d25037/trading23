@@ -11,6 +11,12 @@ pub enum MyError {
     #[error("out of range for slice of length")]
     OutOfRange,
     #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Fmt(#[from] std::fmt::Error),
+    #[error(transparent)]
+    VarError(#[from] std::env::VarError),
+    #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
     Serde(#[from] serde_json::Error),

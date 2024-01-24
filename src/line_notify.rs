@@ -1,12 +1,12 @@
 use std::{thread, time::Duration};
 
-use crate::database::stocks::Output;
+use crate::{database::stocks::Output, my_error::MyError};
 use log::{error, info};
+use reqwest::Client;
 
-pub async fn send_message(message: &str) {
-    let client = reqwest::Client::new();
+pub async fn send_message(client: &Client, message: &str) -> Result<(), MyError> {
     let url = "https://notify-api.line.me/api/notify";
-    let config = crate::config::GdriveJson::new();
+    let config = crate::config::GdriveJson::new()?;
     let token = config.line_token();
 
     let res = client
@@ -22,20 +22,25 @@ pub async fn send_message(message: &str) {
 
     match res {
         Ok(res) => {
-            info!("Status: {}", res.status());
+            info!("Line Notify, Status: {}", res.status());
         }
         Err(e) => {
             error!("Error: {}", e);
         }
     }
+    Ok(())
 }
 
-pub async fn send_message_from_jquants_output(output: Output) {
-    send_message(&output.get_entry_long_or_short()).await;
-    thread::sleep(Duration::from_secs(2));
-    send_message(output.get_long_stocks()).await;
-    thread::sleep(Duration::from_secs(2));
-    send_message(output.get_short_stocks()).await;
+pub async fn send_message_from_jquants_output(
+    client: &Client,
+    output: Output,
+) -> Result<(), MyError> {
+    send_message(client, &output.get_entry_long_or_short()).await?;
+    thread::sleep(Duration::from_secs(1));
+    send_message(client, output.get_long_stocks()).await?;
+    thread::sleep(Duration::from_secs(1));
+    send_message(client, output.get_short_stocks()).await?;
+    Ok(())
 }
 
 // pub async fn send_message_from_jquants_daytrading(

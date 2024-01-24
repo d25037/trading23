@@ -1,7 +1,7 @@
-use analysis::stocks_afternoon;
 use clap::{Args, Parser, Subcommand};
 use database::stocks::SelectDate;
 use log::{error, info};
+use my_error::MyError;
 use std::env;
 
 mod analysis;
@@ -61,28 +61,40 @@ async fn main() {
 
     let cli = Cli::parse();
 
+    let client = reqwest::Client::new();
+
     match &cli.command {
         Commands::Stocks(args) => {
             match (args.backtest, args.testrun) {
                 // live
                 (false, false) => match args.afternoon {
                     true => {
-                        line_notify::send_message("Starting Afternoon process").await;
+                        info!("Starting Afternoon process");
 
-                        let client = reqwest::Client::new();
+                        line_notify::send_message(&client, "Starting Afternoon process")
+                            .await
+                            .unwrap();
+
                         let prices_am = match jquants::live::PricesAm::new(&client).await {
-                            Ok(output) => output,
+                            Ok(prices_am) => prices_am,
                             Err(e) => match e {
-                                my_error::MyError::NotLatestData => {
+                                MyError::NotLatestData => {
                                     error!("{}", e);
-                                    return line_notify::send_message("NotLatestData").await;
+                                    line_notify::send_message(&client, "NotLatestData")
+                                        .await
+                                        .unwrap();
+                                    return;
                                 }
                                 _ => {
                                     error!("fetch morning market failed: {}", e);
-                                    return line_notify::send_message(
+
+                                    line_notify::send_message(
+                                        &client,
                                         "fetch morning market failed",
                                     )
-                                    .await;
+                                    .await
+                                    .unwrap();
+                                    return;
                                 }
                             },
                         };
@@ -93,31 +105,38 @@ async fn main() {
                                 Ok(output) => output,
                                 Err(e) => {
                                     error!("StocksAfternoonList::from_nikkei225 failed: {}", e);
-                                    return line_notify::send_message(
+                                    line_notify::send_message(
+                                        &client,
                                         "StocksAfternoonList::from_nikkei225 failed",
                                     )
-                                    .await;
+                                    .await
+                                    .unwrap();
+                                    return;
                                 }
                             };
 
                         if let Err(e) = stocks_afternoon_list.for_afternoon_strategy() {
                             error!("for_afternoon_strategy failed: {}", e);
-                            return line_notify::send_message("for_afternoon_strategy failed")
-                                .await;
+                            line_notify::send_message(&client, "for_afternoon_strategy failed")
+                                .await
+                                .unwrap();
+                            return;
                         };
 
-                        line_notify::send_message("Success").await;
+                        line_notify::send_message(&client, "Success").await.unwrap();
                     }
+
                     false => {
-                        line_notify::send_message("Starting Next day process").await;
+                        line_notify::send_message(&client, "Starting Next day process")
+                            .await
+                            .unwrap();
 
                         match jquants::live::fetch_nikkei225(args.force).await {
-                            Ok(output) => {
+                            Ok(_) => {
                                 info!("fetch_nikkei225 success");
-                                output
                             }
                             Err(e) => match e {
-                                my_error::MyError::NotLatestData => return error!("{}", e),
+                                MyError::NotLatestData => return error!("{}", e),
                                 _ => return error!("fetch_nikkei225 failed: {}", e),
                             },
                         };
@@ -139,19 +158,27 @@ async fn main() {
                                 Ok(output) => output,
                                 Err(e) => {
                                     error!("create_stocks_window_list failed: {}", e);
-                                    return line_notify::send_message(
+                                    line_notify::send_message(
+                                        &client,
                                         "create_stocks_window_list failed",
                                     )
-                                    .await;
+                                    .await
+                                    .unwrap();
+                                    return;
                                 }
                             };
 
                         if let Err(e) = stocks_window_list.for_cloud_strategy() {
                             error!("for_cloud_strategy failed: {}", e);
-                            return line_notify::send_message("for_cloud_strategy failed").await;
+                            line_notify::send_message(&client, "for_cloud_strategy failed")
+                                .await
+                                .unwrap();
+                            return;
                         };
 
-                        line_notify::send_message("Next day process, success").await;
+                        line_notify::send_message(&client, "Next day process, success")
+                            .await
+                            .unwrap();
                     }
                 },
 
@@ -218,7 +245,6 @@ async fn main() {
 
                     // stocks_window_list.ccc().unwrap();
 
-                    let client = reqwest::Client::new();
                     let prices_am = jquants::live::PricesAm::new(&client).await.unwrap();
                     let aaa =
                         analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(&prices_am)
@@ -267,7 +293,9 @@ async fn main() {
                 let output =
                     database::stocks::select_stocks(&conn, Some(SelectDate::new(year, month, day)));
                 if *notify {
-                    line_notify::send_message_from_jquants_output(output).await;
+                    line_notify::send_message_from_jquants_output(&client, output)
+                        .await
+                        .unwrap();
                 }
             }
 

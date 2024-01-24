@@ -23,7 +23,7 @@ impl Nikkei225 {
 }
 
 pub fn load_nikkei225_list() -> Result<Vec<Nikkei225>, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let nikkei225_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("nikkei225_lists")
@@ -50,7 +50,7 @@ pub enum AssetType {
 }
 
 pub fn get_fetched_ohlc_file_path(asset_type: AssetType) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let fetched_ohlcs_dir_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("fetched_ohlcs");
@@ -74,7 +74,7 @@ pub fn get_fetched_ohlc_file_path(asset_type: AssetType) -> Result<PathBuf, MyEr
 }
 
 pub fn get_backtest_json_file_path(ohlc_type: AssetType) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let backtest_json_parent_dir_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("backtest_json");
@@ -89,7 +89,7 @@ pub fn get_backtest_json_file_path(ohlc_type: AssetType) -> Result<PathBuf, MyEr
 }
 
 pub fn get_topix_ohlc_file_path() -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let backtest_json_parent_dir_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("fetched_ohlcs")
@@ -98,7 +98,7 @@ pub fn get_topix_ohlc_file_path() -> Result<PathBuf, MyError> {
 }
 
 pub fn get_jquants_break_path(file_name: &str) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let backtest_json_parent_dir_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("jquants_break");
@@ -107,7 +107,7 @@ pub fn get_jquants_break_path(file_name: &str) -> Result<PathBuf, MyError> {
 }
 
 pub fn get_jquants_window_path(file_name: &str) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let backtest_json_parent_dir_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("jquants_window");
@@ -115,7 +115,7 @@ pub fn get_jquants_window_path(file_name: &str) -> Result<PathBuf, MyError> {
     Ok(backtest_json_parent_dir_path.join(file_name))
 }
 pub fn get_jquants_cloud_path(file_name: &str) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let backtest_json_parent_dir_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("jquants_cloud");
@@ -124,7 +124,7 @@ pub fn get_jquants_cloud_path(file_name: &str) -> Result<PathBuf, MyError> {
 }
 
 pub fn get_jquants_afternoon_path(file_name: &str) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH").unwrap();
+    let gdrive_path = std::env::var("GDRIVE_PATH")?;
     let backtest_json_parent_dir_path = Path::new(&gdrive_path)
         .join("trading23")
         .join("jquants_afternoon");
