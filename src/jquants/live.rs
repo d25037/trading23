@@ -179,6 +179,7 @@ impl TradingCalender {
             ))),
         }
     }
+
     pub fn is_today_trading_day(&self) -> bool {
         let today = {
             let now = chrono::Local::now();
@@ -296,40 +297,6 @@ impl TopixInner {
         self.close
     }
 }
-
-// pub async fn fetch_daily_quotes(client: &Client, code: i32) -> Result<DailyQuotes, MyError> {
-//     let config = crate::config::GdriveJson::new();
-//     let id_token = config.jquants_id_token();
-//     let url = "https://api.jquants.com/v1/prices/daily_quotes";
-
-//     let query = json!({"code": code});
-
-//     // info!("Fetch Daily OHLC");
-//     let res = client
-//         .get(url)
-//         .query(&query)
-//         .bearer_auth(id_token)
-//         .send()
-//         .await?;
-
-//     match res.status() {
-//         StatusCode::OK => {
-//             info!("Status code: {}, code: {}", res.status(), code);
-//             let daily_quotes = res.json::<DailyQuotes>().await?;
-//             Ok(daily_quotes)
-//         }
-//         StatusCode::UNAUTHORIZED => {
-//             let body = res.text().await?;
-//             info!("Status code 401 {}", body);
-//             Err(MyError::IdTokenExpired(body))
-//         }
-//         _ => Err(MyError::Anyhow(anyhow!(
-//             "Status code: {}, {}",
-//             res.status(),
-//             res.text().await?
-//         ))),
-//     }
-// }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct DailyQuotes {
@@ -503,7 +470,7 @@ impl PricesAm {
         let id_token = config.jquants_id_token();
         let url = "https://api.jquants.com/v1/prices/prices_am";
 
-        info!("Fetch Daily OHLC");
+        info!("Fetch morning market OHLC");
         let res = client.get(url).bearer_auth(id_token).send().await?;
 
         match res.status() {
@@ -511,7 +478,8 @@ impl PricesAm {
                 info!("Status code: {}", res.status());
                 let body = res.text().await?;
                 let json = serde_json::from_str::<PricesAm>(&body).unwrap();
-                info!("{:?}", json);
+                debug!("{:?}", json);
+
                 Ok(json)
             }
             StatusCode::UNAUTHORIZED => {
