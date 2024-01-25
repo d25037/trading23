@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::jquants::live::PricesAm;
 use crate::markdown::Markdown;
 use crate::my_error::MyError;
-use crate::my_file_io::{get_fetched_ohlc_file_path, load_nikkei225_list, AssetType};
+use crate::my_file_io::{get_fetched_ohlc_file_path, load_nikkei225_list, AssetType, JquantsStyle};
 
 use super::live::OhlcPremium;
 use anyhow::anyhow;
@@ -36,16 +36,21 @@ impl StocksAfternoon {
         unit: f64,
         date: &str,
     ) -> Result<Self, MyError> {
-        let len = ohlc_vec.len();
-        if len < 59 {
+        let position = match ohlc_vec[ohlc_vec.len() - 1].get_date() {
+            x if x == date => ohlc_vec.len() - 1,
+            _ => ohlc_vec.len() - 2,
+        };
+
+        // let len = ohlc_vec.len();
+        if position < 60 {
             return Err(MyError::OutOfRange);
         }
         // info!("{}: {} has been loaded", code, name);
-        // info!("len: {}", len);
+        // info!("position: {}", position);
 
-        let ohlc_5 = &ohlc_vec[(len - 5)..len];
-        let ohlc_20 = &ohlc_vec[(len - 20)..len];
-        let ohlc_60 = &ohlc_vec[(len - 60)..len];
+        let ohlc_5 = &ohlc_vec[(position - 5)..position];
+        let ohlc_20 = &ohlc_vec[(position - 20)..position];
+        let ohlc_60 = &ohlc_vec[(position - 60)..position];
 
         let (prev_19, last) = ohlc_20.split_at(19);
         let last_close = last[0].get_close();
@@ -122,7 +127,7 @@ impl StocksAfternoon {
             (lower_bound, upper_bound)
         };
 
-        let yesterday_close = ohlc_vec[len - 1].get_close();
+        let yesterday_close = ohlc_vec[position - 1].get_close();
 
         let (morning_open, morning_close) = prices_am.get_stock_ohlc(code).unwrap_or((0.0, 0.0));
 
@@ -321,7 +326,7 @@ impl StocksAfternoonList {
 
     pub fn output_for_markdown_afternoon(&self, date: &str) -> Result<Markdown, MyError> {
         let mut markdown = Markdown::new();
-        markdown.h1(date);
+        markdown.h1(date)?;
 
         for stocks_afternoon in self.data.iter().take(20) {
             markdown.body(&stocks_afternoon.markdown_body_output()?)?;
@@ -334,13 +339,13 @@ impl StocksAfternoonList {
 
     pub fn for_afternoon_strategy(mut self) -> Result<(), MyError> {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        // let mut on_the_cloud = self.get_on_the_cloud();
-        // on_the_cloud.append(self.get_between_the_cloud());
-        // on_the_cloud.append(self.get_under_the_cloud());
+        let mut on_the_cloud = self.get_on_the_cloud();
+        on_the_cloud.append(self.get_between_the_cloud());
+        on_the_cloud.append(self.get_under_the_cloud());
 
-        self.sort_by_abs_latest_move();
-        let markdown = self.output_for_markdown_afternoon(&today)?;
-        let path = crate::my_file_io::get_jquants_afternoon_path(&today)?;
+        on_the_cloud.sort_by_abs_latest_move();
+        let markdown = on_the_cloud.output_for_markdown_afternoon(&today)?;
+        let path = crate::my_file_io::get_jquants_path(JquantsStyle::Afternoon, &today)?;
         markdown.write_to_file(&path)?;
 
         Ok(())

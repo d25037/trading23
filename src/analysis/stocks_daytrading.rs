@@ -263,33 +263,33 @@ impl StocksDaytradingList {
         });
     }
 
-    pub fn output_for_markdown(&self, date: &str) -> Markdown {
+    pub fn output_for_markdown(&self, date: &str) -> Result<Markdown, MyError> {
         let mut markdown = Markdown::new();
-        markdown.h1(date);
+        markdown.h1(date)?;
 
         let mut markdown_br = Markdown::new();
         let mut markdown_fbr = Markdown::new();
         let mut markdown_fbs = Markdown::new();
         let mut markdown_bs = Markdown::new();
 
-        markdown_br.h2("Breakout Resistance");
-        markdown_fbr.h2("Failed Breakout Resistance");
-        markdown_fbs.h2("Failed Breakout Support");
-        markdown_bs.h2("Breakout Support");
+        markdown_br.h2("Breakout Resistance")?;
+        markdown_fbr.h2("Failed Breakout Resistance")?;
+        markdown_fbs.h2("Failed Breakout Support")?;
+        markdown_bs.h2("Breakout Support")?;
 
         for stocks_daytrading in &self.data {
             match stocks_daytrading.status {
                 Status::BreakoutResistance => {
-                    markdown_br.body(&stocks_daytrading.markdown_body_output());
+                    markdown_br.body(&stocks_daytrading.markdown_body_output())?;
                 }
                 Status::FailedBreakoutResistance => {
-                    markdown_fbr.body(&stocks_daytrading.markdown_body_output());
+                    markdown_fbr.body(&stocks_daytrading.markdown_body_output())?;
                 }
                 Status::FailedBreakoutSupport => {
-                    markdown_fbs.body(&stocks_daytrading.markdown_body_output());
+                    markdown_fbs.body(&stocks_daytrading.markdown_body_output())?;
                 }
                 Status::BreakoutSupport => {
-                    markdown_bs.body(&stocks_daytrading.markdown_body_output());
+                    markdown_bs.body(&stocks_daytrading.markdown_body_output())?;
                 }
                 _ => {}
             }
@@ -302,7 +302,7 @@ impl StocksDaytradingList {
 
         info!("{}", markdown.buffer());
 
-        markdown
+        Ok(markdown)
     }
 
     fn t_test(&self) -> String {

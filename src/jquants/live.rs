@@ -550,7 +550,20 @@ pub struct PricesAm {
 }
 
 impl PricesAm {
-    pub async fn new(client: &Client) -> Result<Self, MyError> {
+    pub async fn new(client: &Client, force: bool) -> Result<Self, MyError> {
+        info!("Starting Fetch Morning Market OHLC");
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+        let first_fetched = first_fetch(client, Some(&today)).await?;
+        match (first_fetched.is_today_trading_day(), force) {
+            (true, _) => info!("Today is Trading Day"),
+            (false, true) => info!("Today is Holiday, but force is true"),
+            (false, false) => {
+                error!("Today is Holiday");
+                return Err(MyError::Holiday);
+            }
+        };
+
         let config = crate::config::GdriveJson::new()?;
         let id_token = config.jquants_id_token();
         let url = "https://api.jquants.com/v1/prices/prices_am";

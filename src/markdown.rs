@@ -33,6 +33,13 @@ impl Markdown {
     }
 
     pub fn write_to_file(&self, path: &Path) -> Result<(), MyError> {
+        // create parent directory if not exists
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+
         let path_with_extension = path.with_extension("md");
         std::fs::write(path_with_extension, &self.buffer)?;
         Ok(())

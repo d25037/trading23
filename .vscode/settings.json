@@ -12,6 +12,7 @@
     "idtoken",
     "klines",
     "mailaddress",
+    "nextday",
     "ohlcs",
     "refreshtoken",
     "responsetime",

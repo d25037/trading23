@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use chrono::{Duration, NaiveDate};
-use log::{error, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::{fmt::Write, time::Instant};
@@ -8,7 +8,9 @@ use std::{fmt::Write, time::Instant};
 use crate::{
     markdown::Markdown,
     my_error::MyError,
-    my_file_io::{get_fetched_ohlc_file_path, load_nikkei225_list, AssetType, Nikkei225},
+    my_file_io::{
+        get_fetched_ohlc_file_path, load_nikkei225_list, AssetType, JquantsStyle, Nikkei225,
+    },
 };
 
 use super::live::OhlcPremium;
@@ -28,7 +30,10 @@ pub struct StocksWindow {
     result_morning_close: Option<f64>,
     result_afternoon_open: Option<f64>,
     result_close: Option<f64>,
+    nextday_morning_close: Option<f64>,
+    morning_move: Option<f64>,
     analyzed_at: String,
+    result_at: Option<String>,
 }
 
 impl StocksWindow {
@@ -132,6 +137,11 @@ impl StocksWindow {
 
         let current_price = ohlc_vec[position].get_close();
 
+        let nextday_morning_close = match ohlc_vec.len() > position + 1 {
+            true => Some(ohlc_vec[position + 1].get_morning_close()),
+            false => None,
+        };
+
         let result_morning_close = match ohlc_vec.len() > position + 1 {
             true => {
                 let result_morning_close = (ohlc_vec[position + 1].get_morning_close()
@@ -159,6 +169,22 @@ impl StocksWindow {
             false => None,
         };
 
+        let morning_move = match ohlc_vec.len() > position + 1 {
+            true => {
+                let morning_move = (ohlc_vec[position + 1].get_morning_close()
+                    - ohlc_vec[position].get_close())
+                    / (prev_19_high - prev_19_low);
+                Some((morning_move * 100.0).round() / 100.0)
+            }
+            false => None,
+        };
+
+        let analyzed_at = ohlc_vec[position].get_date().to_owned();
+        let result_at = match ohlc_vec.len() > position + 1 {
+            true => Some(ohlc_vec[position + 1].get_date().to_owned()),
+            false => None,
+        };
+
         Ok(Self {
             code,
             name: name.to_owned(),
@@ -173,11 +199,22 @@ impl StocksWindow {
             result_morning_close,
             result_afternoon_open,
             result_close,
-            analyzed_at: date.to_owned(),
+            nextday_morning_close,
+            morning_move,
+            analyzed_at,
+            result_at,
         })
     }
 
-    fn markdown_body_output(&self) -> String {
+    fn markdown_body_output(&self, afternoon: bool) -> String {
+        let (current_price, latest_move) = match afternoon {
+            true => (
+                self.nextday_morning_close.unwrap(),
+                self.morning_move.unwrap(),
+            ),
+            false => (self.current_price, self.latest_move),
+        };
+
         let mut buffer = String::new();
         let name = match self.name.chars().count() > 5 {
             true => {
@@ -187,15 +224,15 @@ impl StocksWindow {
             false => self.name.to_owned(),
         };
 
-        let (status, difference) = match self.current_price {
+        let (status, difference) = match current_price {
             x if x < self.lower_bound => {
-                let difference = (self.current_price - self.lower_bound) / self.atr;
+                let difference = (current_price - self.lower_bound) / self.atr;
                 let difference = (difference * 100.0).round() / 100.0;
 
                 ("Below", Some(difference))
             }
             x if x > self.upper_bound => {
-                let difference = (self.current_price - self.upper_bound) / self.atr;
+                let difference = (current_price - self.upper_bound) / self.atr;
 
                 let difference = (difference * 100.0).round() / 100.0;
                 ("Above", Some(difference))
@@ -213,7 +250,7 @@ impl StocksWindow {
             "{} {}, {}円 {}({} - {}) {}",
             self.code,
             name,
-            self.current_price,
+            current_price,
             status,
             self.lower_bound,
             self.upper_bound,
@@ -224,7 +261,7 @@ impl StocksWindow {
         writeln!(
             buffer,
             "ATR: {}, Unit: {}, Diff.: {}, Move: {}, 必要金額: {}円",
-            self.atr, self.unit, self.standardized_diff, self.latest_move, self.required_amount
+            self.atr, self.unit, self.standardized_diff, latest_move, self.required_amount
         )
         .unwrap();
 
@@ -240,6 +277,10 @@ impl StocksWindow {
         }
 
         buffer
+    }
+
+    fn markdown_body_output_default(&self) -> String {
+        self.markdown_body_output(false)
     }
 
     pub fn get_afternoon_close(&self) -> f64 {
@@ -299,95 +340,169 @@ impl StocksWindowList {
         self.data.append(&mut stocks_daytrading_list.data);
     }
 
-    fn sort_by_latest_move(&mut self) {
-        self.data
-            .sort_by(|a, b| b.latest_move.partial_cmp(&a.latest_move).unwrap());
+    fn sort_by_latest_move(&mut self, absolute: bool) {
+        match absolute {
+            true => self.data.sort_by(|a, b| {
+                b.latest_move
+                    .abs()
+                    .partial_cmp(&a.latest_move.abs())
+                    .unwrap()
+            }),
+            false => self
+                .data
+                .sort_by(|a, b| b.latest_move.partial_cmp(&a.latest_move).unwrap()),
+        }
+    }
+    fn sort_by_latest_move_default(&mut self) {
+        self.sort_by_latest_move(true)
     }
 
-    fn sort_by_abs_latest_move(&mut self) {
-        self.data.sort_by(|a, b| {
-            b.latest_move
+    fn sort_by_morning_move(&mut self, absolute: bool) {
+        match absolute {
+            true => self.data.sort_by(|a, b| {
+                b.morning_move
+                    .unwrap()
+                    .abs()
+                    .partial_cmp(&a.morning_move.unwrap().abs())
+                    .unwrap()
+            }),
+            false => self
+                .data
+                .sort_by(|a, b| b.morning_move.partial_cmp(&a.morning_move).unwrap()),
+        }
+    }
+    fn sort_by_morning_move_default(&mut self) {
+        self.sort_by_morning_move(true)
+    }
+
+    fn sort_by_difference(&mut self, absolute: bool) {
+        match absolute {
+            true => self.data.sort_by(|a, b| {
+                let a_difference = (a.current_price - a.lower_bound) / a.atr;
+                let b_difference = (b.current_price - b.lower_bound) / b.atr;
+                b_difference.abs().partial_cmp(&a_difference.abs()).unwrap()
+            }),
+            false => self.data.sort_by(|a, b| {
+                let a_difference = (a.current_price - a.lower_bound) / a.atr;
+                let b_difference = (b.current_price - b.lower_bound) / b.atr;
+                b_difference.partial_cmp(&a_difference).unwrap()
+            }),
+        }
+    }
+
+    fn sort_by_difference_default(&mut self) {
+        self.sort_by_difference(true)
+    }
+
+    fn get_morning_mover(&self) -> Option<StocksWindowList> {
+        self.data[0].result_morning_close?;
+
+        let mut morning_mover = self.data.clone();
+        morning_mover.sort_by(|a, b| {
+            b.morning_move
+                .unwrap()
                 .abs()
-                .partial_cmp(&a.latest_move.abs())
+                .partial_cmp(&a.morning_move.unwrap().abs())
                 .unwrap()
         });
+
+        Some(StocksWindowList::from_vec(
+            morning_mover.into_iter().take(20).collect(),
+        ))
     }
 
-    fn sort_by_difference(&mut self) {
-        self.data.sort_by(|a, b| {
-            let a_difference = (a.current_price - a.lower_bound) / a.atr;
-            let b_difference = (b.current_price - b.lower_bound) / b.atr;
-            b_difference.partial_cmp(&a_difference).unwrap()
-        });
-    }
-
-    fn sort_by_abs_difference(&mut self) {
-        self.data.sort_by(|a, b| {
-            let a_difference = (a.current_price - a.lower_bound) / a.atr;
-            let b_difference = (b.current_price - b.lower_bound) / b.atr;
-            b_difference.abs().partial_cmp(&a_difference.abs()).unwrap()
-        });
-    }
-
-    fn get_on_the_cloud(&self) -> StocksWindowList {
+    fn get_on_the_cloud(&self, afternoon: bool) -> StocksWindowList {
         let on_the_cloud = self
             .data
             .iter()
             .filter(|x| {
-                let difference = (x.current_price - x.upper_bound) / x.atr;
+                let current_price = match afternoon {
+                    true => x.nextday_morning_close.unwrap(),
+                    false => x.current_price,
+                };
+                let difference = (current_price - x.upper_bound) / x.atr;
                 difference > 0.0 && difference < 0.2 && x.standardized_diff < 0.12
             })
             .collect::<Vec<_>>();
 
         StocksWindowList::from_vec(on_the_cloud.into_iter().cloned().collect())
     }
+    fn get_on_the_cloud_default(&self) -> StocksWindowList {
+        self.get_on_the_cloud(false)
+    }
 
-    fn get_between_the_cloud(&self) -> StocksWindowList {
+    fn get_between_the_cloud(&self, afternoon: bool) -> StocksWindowList {
         let between_the_cloud = self
             .data
             .iter()
             .filter(|x| {
-                x.current_price > x.lower_bound
-                    && x.current_price < x.upper_bound
+                let current_price = match afternoon {
+                    true => x.nextday_morning_close.unwrap(),
+                    false => x.current_price,
+                };
+                current_price > x.lower_bound
+                    && current_price < x.upper_bound
                     && x.standardized_diff < 0.12
             })
             .collect::<Vec<_>>();
 
         StocksWindowList::from_vec(between_the_cloud.into_iter().cloned().collect())
     }
+    // fn get_between_the_cloud_default(&self) -> StocksWindowList {
+    //     self.get_between_the_cloud(false)
+    // }
 
-    fn get_under_the_cloud(&self) -> StocksWindowList {
+    fn get_under_the_cloud(&self, afternoon: bool) -> StocksWindowList {
         let under_the_cloud = self
             .data
             .iter()
             .filter(|x| {
-                let difference = (x.current_price - x.lower_bound) / x.atr;
+                let current_price = match afternoon {
+                    true => x.nextday_morning_close.unwrap(),
+                    false => x.current_price,
+                };
+                let difference = (current_price - x.lower_bound) / x.atr;
                 difference < 0.0 && difference > -0.2 && x.standardized_diff < 0.12
             })
             .collect::<Vec<_>>();
 
         StocksWindowList::from_vec(under_the_cloud.into_iter().cloned().collect())
     }
+    fn get_under_the_cloud_default(&self) -> StocksWindowList {
+        self.get_under_the_cloud(false)
+    }
 
-    fn output_for_markdown(&self, date: &str) -> Markdown {
+    fn get_around_the_cloud(&self, afternoon: bool) -> StocksWindowList {
+        let mut around_the_cloud = StocksWindowList::new();
+        around_the_cloud.append(self.get_on_the_cloud(afternoon));
+        around_the_cloud.append(self.get_between_the_cloud(afternoon));
+        around_the_cloud.append(self.get_under_the_cloud(afternoon));
+
+        around_the_cloud
+    }
+    fn get_around_the_cloud_default(&self) -> StocksWindowList {
+        self.get_around_the_cloud(false)
+    }
+
+    fn output_for_markdown_window(&self, date: &str) -> Result<Markdown, MyError> {
         let mut markdown = Markdown::new();
-        markdown.h1(date);
+        markdown.h1(date)?;
 
         let start_index = 0;
         let end_index = self.data.len().min(10);
 
-        markdown.h2("Top 10");
+        markdown.h2("Top 10")?;
         for stocks_window in &self.data[start_index..end_index] {
-            markdown.body(&stocks_window.markdown_body_output());
+            markdown.body(&stocks_window.markdown_body_output_default())?;
         }
 
         if self.data.len() > 10 {
             let start_index = self.data.len() - 10;
             let end_index = self.data.len();
 
-            markdown.h2("Bottom 10");
+            markdown.h2("Bottom 10")?;
             for stocks_window in &self.data[start_index..end_index] {
-                markdown.body(&stocks_window.markdown_body_output());
+                markdown.body(&stocks_window.markdown_body_output_default())?;
             }
         }
 
@@ -396,56 +511,57 @@ impl StocksWindowList {
         markdown.body(&format!(
             "<Long> MC_mean{}: {}, AC_mean{}: {}",
             row, long_morning_close, row, long_afternoon_close
-        ));
+        ))?;
 
         let (short_morning_close, short_afternoon_close) = self.mean_short_rows_someday(row);
         markdown.body(&format!(
             "<Short> MC_mean{}: {}, AC_mean{}: {}",
             row, short_morning_close, row, short_afternoon_close
-        ));
+        ))?;
 
-        info!("{}", markdown.buffer());
+        debug!("{}", markdown.buffer());
 
-        markdown
+        Ok(markdown)
     }
 
-    pub fn output_for_markdown_cloud(&self, date: &str) -> Markdown {
+    pub fn output_for_markdown_cloud(
+        &self,
+        afternoon: bool,
+    ) -> Result<(Markdown, String), MyError> {
+        let date = match afternoon {
+            true => self.data[0].result_at.clone().unwrap(),
+            false => self.data[0].analyzed_at.clone(),
+        };
+
         let mut markdown = Markdown::new();
-        markdown.h1(date);
+        markdown.h1(&date)?;
 
-        // let start_index = 0;
-        // let end_index = self.data.len().min(10);
-
-        // markdown.h2("Top 10");
         for stocks_window in &self.data {
-            markdown.body(&stocks_window.markdown_body_output());
+            match afternoon {
+                true => markdown.body(&stocks_window.markdown_body_output(true))?,
+                false => markdown.body(&stocks_window.markdown_body_output_default())?,
+            }
         }
-
-        // if self.data.len() > 10 {
-        //     let start_index = self.data.len() - 10;
-        //     let end_index = self.data.len();
-
-        //     markdown.h2("Bottom 10");
-        //     for stocks_window in &self.data[start_index..end_index] {
-        //         markdown.body(&stocks_window.markdown_body_output());
-        //     }
-        // }
 
         let (long_morning_close, long_afternoon_close) = self.mean_on_the_cloud();
         markdown.body(&format!(
             "<Above> MC_mean5: {}, AC_mean5: {}",
             long_morning_close, long_afternoon_close
-        ));
+        ))?;
 
         let (short_morning_close, short_afternoon_close) = self.mean_under_the_cloud();
         markdown.body(&format!(
             "<Below> MC_mean5: {}, AC_mean5: {}",
             short_morning_close, short_afternoon_close
-        ));
+        ))?;
 
-        info!("{}", markdown.buffer());
+        debug!("{}", markdown.buffer());
 
-        markdown
+        Ok((markdown, date))
+    }
+
+    pub fn output_for_markdown_cloud_default(&self) -> Result<(Markdown, String), MyError> {
+        self.output_for_markdown_cloud(false)
     }
 
     fn mean_long_rows_someday(&self, row: usize) -> (f64, f64) {
@@ -483,7 +599,7 @@ impl StocksWindowList {
     }
 
     fn mean_on_the_cloud(&self) -> (f64, f64) {
-        let on_the_cloud = self.get_on_the_cloud();
+        let on_the_cloud = self.get_on_the_cloud_default();
 
         let mut morning_close_sum = 0.0;
         let mut afternoon_close_sum = 0.0;
@@ -498,7 +614,7 @@ impl StocksWindowList {
         )
     }
     fn mean_under_the_cloud(&self) -> (f64, f64) {
-        let under_the_cloud = self.get_under_the_cloud();
+        let under_the_cloud = self.get_under_the_cloud_default();
 
         let mut morning_close_sum = 0.0;
         let mut afternoon_close_sum = 0.0;
@@ -526,11 +642,11 @@ impl StocksWindowList {
         for (date, stocks_window_list) in date_to_stocks {
             let mut stocks_window_list = StocksWindowList::from_vec(stocks_window_list);
             // stocks_window_list.sort_by_latest_move();
-            stocks_window_list.sort_by_difference();
+            stocks_window_list.sort_by_difference(false);
 
-            let markdown = stocks_window_list.output_for_markdown(&date);
-            let path = crate::my_file_io::get_jquants_window_path(&date)?;
-            markdown.write_to_file(&path);
+            let markdown = stocks_window_list.output_for_markdown_window(&date)?;
+            let path = crate::my_file_io::get_jquants_path(JquantsStyle::Window, &date)?;
+            markdown.write_to_file(&path)?;
         }
 
         Ok(())
@@ -548,14 +664,21 @@ impl StocksWindowList {
 
         for (date, stocks_window_list) in date_to_stocks {
             let stocks_window_list = StocksWindowList::from_vec(stocks_window_list);
-            let mut on_the_cloud = stocks_window_list.get_on_the_cloud();
-            on_the_cloud.append(stocks_window_list.get_between_the_cloud());
-            on_the_cloud.append(stocks_window_list.get_under_the_cloud());
-            on_the_cloud.sort_by_abs_latest_move();
+            let mut around_the_cloud = stocks_window_list.get_around_the_cloud_default();
+            around_the_cloud.sort_by_latest_move(true);
 
-            let markdown = on_the_cloud.output_for_markdown_cloud(&date);
-            let path = crate::my_file_io::get_jquants_cloud_path(&date)?;
-            markdown.write_to_file(&path);
+            let (markdown, analyzed_at) = around_the_cloud.output_for_markdown_cloud_default()?;
+            let path = crate::my_file_io::get_jquants_path(JquantsStyle::Cloud, &analyzed_at)?;
+            markdown.write_to_file(&path)?;
+
+            if stocks_window_list.data[0].nextday_morning_close.is_some() {
+                let mut afternoon_list = stocks_window_list.get_around_the_cloud(true);
+                afternoon_list.sort_by_morning_move(true);
+                let (markdown, result_at) = afternoon_list.output_for_markdown_cloud(true)?;
+                let path =
+                    crate::my_file_io::get_jquants_path(JquantsStyle::Afternoon, &result_at)?;
+                markdown.write_to_file(&path)?;
+            }
         }
 
         Ok(())

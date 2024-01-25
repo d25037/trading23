@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
-use std::path::{Path, PathBuf};
-
 use crate::my_error::MyError;
-use log::debug;
+use anyhow::{anyhow, Result};
+use chrono::Datelike;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Nikkei225 {
@@ -97,39 +97,41 @@ pub fn get_topix_ohlc_file_path() -> Result<PathBuf, MyError> {
     Ok(backtest_json_parent_dir_path.join("topix.json"))
 }
 
-pub fn get_jquants_break_path(file_name: &str) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH")?;
-    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
-        .join("trading23")
-        .join("jquants_break");
-
-    Ok(backtest_json_parent_dir_path.join(file_name))
+pub enum JquantsStyle {
+    Break,
+    Window,
+    Cloud,
+    Afternoon,
 }
 
-pub fn get_jquants_window_path(file_name: &str) -> Result<PathBuf, MyError> {
+pub fn get_jquants_path(jquants_style: JquantsStyle, file_name: &str) -> Result<PathBuf, MyError> {
+    let dir_name = match jquants_style {
+        JquantsStyle::Break => "jquants_break",
+        JquantsStyle::Window => "jquants_window",
+        JquantsStyle::Cloud => "jquants_cloud",
+        JquantsStyle::Afternoon => "jquants_afternoon",
+    };
+
     let gdrive_path = std::env::var("GDRIVE_PATH")?;
-    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
-        .join("trading23")
-        .join("jquants_window");
+    let backtest_json_parent_dir_path = Path::new(&gdrive_path).join("trading23").join(dir_name);
 
-    Ok(backtest_json_parent_dir_path.join(file_name))
-}
-pub fn get_jquants_cloud_path(file_name: &str) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH")?;
-    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
-        .join("trading23")
-        .join("jquants_cloud");
+    // "YYYY-MM-DD" であれば NaiveDateに変換してpathを作成
+    match chrono::NaiveDate::parse_from_str(file_name, "%Y-%m-%d") {
+        Ok(datetime) => {
+            let year = datetime.year();
+            let month = datetime.month();
+            let day = datetime.day();
 
-    Ok(backtest_json_parent_dir_path.join(file_name))
-}
-
-pub fn get_jquants_afternoon_path(file_name: &str) -> Result<PathBuf, MyError> {
-    let gdrive_path = std::env::var("GDRIVE_PATH")?;
-    let backtest_json_parent_dir_path = Path::new(&gdrive_path)
-        .join("trading23")
-        .join("jquants_afternoon");
-
-    Ok(backtest_json_parent_dir_path.join(file_name))
+            let path = backtest_json_parent_dir_path
+                .join(format!("{}-{}", year, month))
+                .join(format!("{}", day));
+            Ok(path)
+        }
+        Err(_) => {
+            info!("{}", file_name);
+            Ok(backtest_json_parent_dir_path.join(file_name))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +143,12 @@ mod tests {
         dotenvy::from_filename(".env_local").unwrap();
         let nikkei225_vec = load_nikkei225_list().unwrap();
         assert_eq!(nikkei225_vec.len(), 225);
+    }
+
+    #[test]
+    fn test_chrono_parse() {
+        let file_name = "2021-01-01";
+        let datetime = chrono::NaiveDate::parse_from_str(file_name, "%Y-%m-%d").unwrap();
+        assert_eq!(datetime.year(), 2021);
     }
 }
