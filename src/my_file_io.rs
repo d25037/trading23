@@ -98,18 +98,20 @@ pub fn get_topix_ohlc_file_path() -> Result<PathBuf, MyError> {
 }
 
 pub enum JquantsStyle {
-    Break,
-    Window,
+    // Break,
+    // Window,
     Cloud,
     Afternoon,
+    Resistance,
 }
 
 pub fn get_jquants_path(jquants_style: JquantsStyle, file_name: &str) -> Result<PathBuf, MyError> {
     let dir_name = match jquants_style {
-        JquantsStyle::Break => "jquants_break",
-        JquantsStyle::Window => "jquants_window",
+        // JquantsStyle::Break => "jquants_break",
+        // JquantsStyle::Window => "jquants_window",
         JquantsStyle::Cloud => "jquants_cloud",
         JquantsStyle::Afternoon => "jquants_afternoon",
+        JquantsStyle::Resistance => "jquants_resistance",
     };
 
     let gdrive_path = std::env::var("GDRIVE_PATH")?;

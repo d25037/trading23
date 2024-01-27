@@ -154,7 +154,7 @@ async fn main() {
                         }
                     };
 
-                if let Err(e) = stocks_afternoon_list.for_afternoon_strategy() {
+                if let Err(e) = stocks_afternoon_list.for_resistance_strategy() {
                     error!("for_afternoon_strategy failed: {}", e);
                     line_notify::send_message(&client, "for_afternoon_strategy failed")
                         .await
@@ -225,7 +225,7 @@ async fn main() {
                         .await
                         .unwrap();
 
-                stocks_window_list.for_cloud_strategy().unwrap();
+                stocks_window_list.for_resistance_strategy().unwrap();
 
                 let prices_am = match jquants::live::PricesAm::new(&client, true).await {
                     Ok(prices_am) => prices_am,
@@ -242,9 +242,7 @@ async fn main() {
                     analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(&prices_am)
                         .unwrap();
 
-                aaa.for_afternoon_strategy().unwrap();
-
-                // analysis::stocks_window::mean_analysis(stocks_window_list, from, to)}
+                aaa.for_resistance_strategy().unwrap();
             }
         }
 

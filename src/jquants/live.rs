@@ -593,7 +593,7 @@ impl PricesAm {
         }
     }
 
-    pub fn get_stock_ohlc(&self, code: i32) -> Option<(f64, f64)> {
+    pub fn get_stock_open_close(&self, code: i32) -> Option<(f64, f64)> {
         let code = {
             let str = code.to_string();
             str + "0"
@@ -609,10 +609,26 @@ impl PricesAm {
             })
             .next()
     }
+
+    pub fn get_stock_am(&self, code: i32) -> Result<PricesAmInner, MyError> {
+        let code = {
+            let str = code.to_string();
+            str + "0"
+        };
+        self.prices_am
+            .iter()
+            .filter(|x| x.code == code)
+            .map(|x| x.to_owned())
+            .next()
+            .ok_or(MyError::Anyhow(anyhow!(
+                "Failed to get stock ohlc premium, code: {}",
+                code
+            )))
+    }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-struct PricesAmInner {
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct PricesAmInner {
     #[serde(rename = "Date")]
     date: String,
     #[serde(rename = "Code")]
@@ -629,6 +645,21 @@ struct PricesAmInner {
     morning_volume: Option<f64>,
     #[serde(rename = "MorningTurnoverValue")]
     morning_turnover_value: Option<f64>,
+}
+impl PricesAmInner {
+    pub fn get_open(&self) -> f64 {
+        self.morning_open.expect("Expected morning_open to be Some")
+    }
+    pub fn get_high(&self) -> f64 {
+        self.morning_high.expect("Expected morning_high to be Some")
+    }
+    pub fn get_low(&self) -> f64 {
+        self.morning_low.expect("Expected morning_low to be Some")
+    }
+    pub fn get_close(&self) -> f64 {
+        self.morning_close
+            .expect("Expected morning_close to be Some")
+    }
 }
 
 pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
