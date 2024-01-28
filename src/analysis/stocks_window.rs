@@ -483,6 +483,7 @@ impl StocksWindowList {
     }
 
     fn sort_by_number_of_resistance_candles(&mut self) {
+        self.data.retain(|x| x.standardized_diff < 0.12);
         self.data.sort_by(|a, b| {
             // number_of_resistanceとnumber_of_supportのうち多い方を優先してソート
             let a_max_candles = a
