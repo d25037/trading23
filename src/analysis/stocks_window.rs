@@ -130,8 +130,20 @@ impl StocksWindow {
             .count();
 
         let status = match ohlc_2[1].get_close() - ohlc_2[0].get_open() {
-            x if x > 0.0 => "Rise",
-            x if x < 0.0 => "Fall",
+            x if x > 0.0 => {
+                if ohlc_2[1].get_close() - ohlc_2[1].get_open() > 0.0 {
+                    "Rise"
+                } else {
+                    "Rise bounded"
+                }
+            }
+            x if x < 0.0 => {
+                if ohlc_2[1].get_close() - ohlc_2[1].get_open() > 0.0 {
+                    "Fall bounded"
+                } else {
+                    "Fall"
+                }
+            }
             _ => "Stable",
         };
 
@@ -328,20 +340,21 @@ impl StocksWindow {
 
         writeln!(
             buffer,
-            "{} {}, {}円, {} [Resistance: {}, Support: {}]",
+            "{} {}, {}円, {} [R: {}, S: {}] D: {}",
             self.code,
             name,
             current_price,
             self.status,
             self.number_of_resistance_candles,
-            self.number_of_support_candles
+            self.number_of_support_candles,
+            self.standardized_diff
         )
         .unwrap();
 
         writeln!(
             buffer,
-            "ATR: {}, Unit: {}, Diff: {} Move: {}, 必要金額: {}円",
-            self.atr, self.unit, self.standardized_diff, latest_move, self.required_amount
+            "ATR: {}, Unit: {}, Move: {}, 必要金額: {}円",
+            self.atr, self.unit, latest_move, self.required_amount
         )
         .unwrap();
 

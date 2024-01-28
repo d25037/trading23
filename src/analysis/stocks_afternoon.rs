@@ -155,20 +155,22 @@ impl StocksAfternoon {
 
         writeln!(
             buffer,
-            "{} {}, {}円, {} [Resistance: {}, Support: {}]",
+            "{} {}, {}円, {} [R: {}, S: {}] D: {}",
             self.code,
             name,
             self.morning_close,
             self.status,
             self.number_of_resistance_candles,
-            self.number_of_support_candles
+            self.number_of_support_candles,
+            self.standardized_diff
         )?;
 
         writeln!(
             buffer,
-            "ATR: {}, Unit: {}, Diff.: {}, Move: {}, 必要金額: {}円",
-            self.atr, self.unit, self.standardized_diff, self.latest_move, self.required_amount
-        )?;
+            "ATR: {}, Unit: {}, Move: {}, 必要金額: {}円",
+            self.atr, self.unit, self.latest_move, self.required_amount
+        )
+        .unwrap();
 
         writeln!(buffer, "Morning Result: {}", morning_result)?;
 
