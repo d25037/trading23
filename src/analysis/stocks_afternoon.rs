@@ -111,8 +111,20 @@ impl StocksAfternoon {
             .count();
 
         let status = match prices_am.get_close() - ohlc_5[4].get_open() {
-            x if x > 0.0 => "Rise",
-            x if x < 0.0 => "Fall",
+            x if x > 0.0 => {
+                if prices_am.get_close() - ohlc_5[4].get_open() > 0.0 {
+                    "Rise"
+                } else {
+                    "Rise bounded"
+                }
+            }
+            x if x < 0.0 => {
+                if prices_am.get_close() - ohlc_5[4].get_open() > 0.0 {
+                    "Fall bounded"
+                } else {
+                    "Fall"
+                }
+            }
             _ => "Stable",
         };
 
@@ -152,6 +164,7 @@ impl StocksAfternoon {
         };
 
         let morning_result = (self.morning_close - self.morning_open) / self.atr;
+        let morning_result = (morning_result * 100.0).round() / 100.0;
 
         writeln!(
             buffer,
@@ -269,16 +282,12 @@ impl StocksAfternoonList {
 
     fn sort_by_number_of_resistance_candles(&mut self) {
         self.data.retain(|x| x.standardized_diff < 0.12);
-
         self.data.sort_by(|a, b| {
-            // number_of_resistanceとnumber_of_supportのうち多い方を優先してソート
-            let a_max_candles = a
-                .number_of_resistance_candles
-                .max(a.number_of_support_candles);
-            let b_max_candles = b
-                .number_of_resistance_candles
-                .max(b.number_of_support_candles);
-            b_max_candles.partial_cmp(&a_max_candles).unwrap()
+            let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
+            let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
+            b_number_of_candles
+                .partial_cmp(&a_number_of_candles)
+                .unwrap()
         })
     }
 

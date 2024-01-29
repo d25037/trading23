@@ -417,27 +417,27 @@ impl DailyQuotes {
         }
     }
 
-    pub fn get_ohlc(self) -> Vec<Ohlc> {
-        let mut ohlc_vec = Vec::new();
-        for jquants_ohlc in self.daily_quotes {
-            if jquants_ohlc.open.is_none()
-                || jquants_ohlc.high.is_none()
-                || jquants_ohlc.low.is_none()
-                || jquants_ohlc.close.is_none()
-            {
-                continue;
-            }
-            let jquants_ohlc = Ohlc::new(
-                jquants_ohlc.date,
-                jquants_ohlc.open.expect("Expected open to be Some"),
-                jquants_ohlc.high.expect("Expected high to be Some"),
-                jquants_ohlc.low.expect("Expected low to be Some"),
-                jquants_ohlc.close.expect("Expected close to be Some"),
-            );
-            ohlc_vec.push(jquants_ohlc);
-        }
-        ohlc_vec
-    }
+    // pub fn get_ohlc(self) -> Vec<Ohlc> {
+    //     let mut ohlc_vec = Vec::new();
+    //     for jquants_ohlc in self.daily_quotes {
+    //         if jquants_ohlc.open.is_none()
+    //             || jquants_ohlc.high.is_none()
+    //             || jquants_ohlc.low.is_none()
+    //             || jquants_ohlc.close.is_none()
+    //         {
+    //             continue;
+    //         }
+    //         let jquants_ohlc = Ohlc::new(
+    //             jquants_ohlc.date,
+    //             jquants_ohlc.open.expect("Expected open to be Some"),
+    //             jquants_ohlc.high.expect("Expected high to be Some"),
+    //             jquants_ohlc.low.expect("Expected low to be Some"),
+    //             jquants_ohlc.close.expect("Expected close to be Some"),
+    //         );
+    //         ohlc_vec.push(jquants_ohlc);
+    //     }
+    //     ohlc_vec
+    // }
 
     pub fn get_ohlc_premium(self) -> Vec<OhlcPremium> {
         let mut ohlc_vec = Vec::new();
@@ -591,23 +591,6 @@ impl PricesAm {
                 res.text().await?
             ))),
         }
-    }
-
-    pub fn get_stock_open_close(&self, code: i32) -> Option<(f64, f64)> {
-        let code = {
-            let str = code.to_string();
-            str + "0"
-        };
-        self.prices_am
-            .iter()
-            .filter(|x| x.code == code)
-            .map(|x| {
-                (
-                    x.morning_open.expect("Expected morning_open to be Some"),
-                    x.morning_close.expect("Expected morning_close to be Some"),
-                )
-            })
-            .next()
     }
 
     pub fn get_stock_am(&self, code: i32) -> Result<PricesAmInner, MyError> {

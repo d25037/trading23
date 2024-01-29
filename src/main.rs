@@ -106,9 +106,9 @@ async fn main() {
                         }
                     };
 
-                if let Err(e) = stocks_window_list.for_cloud_strategy() {
-                    error!("for_cloud_strategy failed: {}", e);
-                    line_notify::send_message(&client, "for_cloud_strategy failed")
+                if let Err(e) = stocks_window_list.for_resistance_strategy() {
+                    error!("for_resistance_strategy failed: {}", e);
+                    line_notify::send_message(&client, "for_resistance_strategy failed")
                         .await
                         .unwrap();
                     return;
@@ -209,16 +209,6 @@ async fn main() {
 
                 let from = "2023-12-01";
                 let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-
-                // let mut break_output =
-                //     analysis::stocks_daytrading::async_exec(someday, someday)
-                //         .await
-                //         .unwrap();
-                //
-                // break_output.sort_by_standardized_diff();
-                // let break_markdown = break_output.output_for_markdown(someday);
-                // let break_path = my_file_io::get_jquants_break_path(someday).unwrap();
-                // break_markdown.write_to_file(&break_path);
 
                 let stocks_window_list =
                     analysis::stocks_window::create_stocks_window_list(from, &today)

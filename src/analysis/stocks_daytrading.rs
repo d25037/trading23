@@ -263,47 +263,47 @@ impl StocksDaytradingList {
         });
     }
 
-    pub fn output_for_markdown(&self, date: &str) -> Result<Markdown, MyError> {
-        let mut markdown = Markdown::new();
-        markdown.h1(date)?;
+    // pub fn output_for_markdown(&self, date: &str) -> Result<Markdown, MyError> {
+    //     let mut markdown = Markdown::new();
+    //     markdown.h1(date)?;
 
-        let mut markdown_br = Markdown::new();
-        let mut markdown_fbr = Markdown::new();
-        let mut markdown_fbs = Markdown::new();
-        let mut markdown_bs = Markdown::new();
+    //     let mut markdown_br = Markdown::new();
+    //     let mut markdown_fbr = Markdown::new();
+    //     let mut markdown_fbs = Markdown::new();
+    //     let mut markdown_bs = Markdown::new();
 
-        markdown_br.h2("Breakout Resistance")?;
-        markdown_fbr.h2("Failed Breakout Resistance")?;
-        markdown_fbs.h2("Failed Breakout Support")?;
-        markdown_bs.h2("Breakout Support")?;
+    //     markdown_br.h2("Breakout Resistance")?;
+    //     markdown_fbr.h2("Failed Breakout Resistance")?;
+    //     markdown_fbs.h2("Failed Breakout Support")?;
+    //     markdown_bs.h2("Breakout Support")?;
 
-        for stocks_daytrading in &self.data {
-            match stocks_daytrading.status {
-                Status::BreakoutResistance => {
-                    markdown_br.body(&stocks_daytrading.markdown_body_output())?;
-                }
-                Status::FailedBreakoutResistance => {
-                    markdown_fbr.body(&stocks_daytrading.markdown_body_output())?;
-                }
-                Status::FailedBreakoutSupport => {
-                    markdown_fbs.body(&stocks_daytrading.markdown_body_output())?;
-                }
-                Status::BreakoutSupport => {
-                    markdown_bs.body(&stocks_daytrading.markdown_body_output())?;
-                }
-                _ => {}
-            }
-        }
+    //     for stocks_daytrading in &self.data {
+    //         match stocks_daytrading.status {
+    //             Status::BreakoutResistance => {
+    //                 markdown_br.body(&stocks_daytrading.markdown_body_output())?;
+    //             }
+    //             Status::FailedBreakoutResistance => {
+    //                 markdown_fbr.body(&stocks_daytrading.markdown_body_output())?;
+    //             }
+    //             Status::FailedBreakoutSupport => {
+    //                 markdown_fbs.body(&stocks_daytrading.markdown_body_output())?;
+    //             }
+    //             Status::BreakoutSupport => {
+    //                 markdown_bs.body(&stocks_daytrading.markdown_body_output())?;
+    //             }
+    //             _ => {}
+    //         }
+    //     }
 
-        markdown.append(markdown_br);
-        markdown.append(markdown_fbr);
-        markdown.append(markdown_fbs);
-        markdown.append(markdown_bs);
+    //     markdown.append(markdown_br);
+    //     markdown.append(markdown_fbr);
+    //     markdown.append(markdown_fbs);
+    //     markdown.append(markdown_bs);
 
-        info!("{}", markdown.buffer());
+    //     info!("{}", markdown.buffer());
 
-        Ok(markdown)
-    }
+    //     Ok(markdown)
+    // }
 
     fn t_test(&self) -> String {
         let morning_close = TTestResult::new(

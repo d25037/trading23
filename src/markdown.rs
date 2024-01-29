@@ -24,9 +24,9 @@ impl Markdown {
         Ok(())
     }
 
-    pub fn append(&mut self, markdown: Markdown) {
-        self.buffer.push_str(&markdown.buffer);
-    }
+    // pub fn append(&mut self, markdown: Markdown) {
+    //     self.buffer.push_str(&markdown.buffer);
+    // }
 
     pub fn buffer(&self) -> &str {
         &self.buffer

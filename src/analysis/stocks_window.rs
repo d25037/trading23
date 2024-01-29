@@ -30,8 +30,8 @@ pub struct StocksWindow {
     number_of_resistance_candles: usize,
     number_of_support_candles: usize,
     status: String,
-    result_morning_close: Option<f64>,
-    result_close: Option<f64>,
+    result_morning: Option<f64>,
+    result_allday: Option<f64>,
     nextday_morning_close: Option<f64>,
     morning_move: Option<f64>,
     analyzed_at: String,
@@ -182,44 +182,35 @@ impl StocksWindow {
 
         let current_price = ohlc_vec[position].get_close();
 
-        let nextday_morning_close = match ohlc_vec.len() > position + 1 {
-            true => Some(ohlc_vec[position + 1].get_morning_close()),
-            false => None,
-        };
-
-        let result_morning_close = match ohlc_vec.len() > position + 1 {
-            true => {
-                let result_morning_close = (ohlc_vec[position + 1].get_morning_close()
-                    - ohlc_vec[position + 1].get_open())
-                    / atr;
-                Some((result_morning_close * 100.0).round() / 100.0)
-            }
-            false => None,
-        };
-        let result_close = match ohlc_vec.len() > position + 1 {
-            true => {
-                let result_close =
-                    (ohlc_vec[position + 1].get_close() - ohlc_vec[position + 1].get_open()) / atr;
-                Some((result_close * 100.0).round() / 100.0)
-            }
-            false => None,
-        };
-
-        let morning_move = match ohlc_vec.len() > position + 1 {
-            true => {
-                let morning_move = (ohlc_vec[position + 1].get_morning_close()
-                    - ohlc_vec[position].get_close())
-                    / (prev_19_high - prev_19_low);
-                Some((morning_move * 100.0).round() / 100.0)
-            }
-            false => None,
-        };
-
         let analyzed_at = ohlc_vec[position].get_date().to_owned();
-        let result_at = match ohlc_vec.len() > position + 1 {
-            true => Some(ohlc_vec[position + 1].get_date().to_owned()),
-            false => None,
-        };
+
+        let (nextday_morning_close, result_morning, result_allday, morning_move, result_at) =
+            match ohlc_vec.len() > position + 1 {
+                true => {
+                    let nextday_morning_close = ohlc_vec[position + 1].get_morning_close();
+                    let result_morning = (ohlc_vec[position + 1].get_morning_close()
+                        - ohlc_vec[position + 1].get_open())
+                        / atr;
+                    let result_morning = (result_morning * 100.0).round() / 100.0;
+                    let result_allday = (ohlc_vec[position + 1].get_close()
+                        - ohlc_vec[position + 1].get_open())
+                        / atr;
+                    let result_allday = (result_allday * 100.0).round() / 100.0;
+                    let morning_move = (ohlc_vec[position + 1].get_morning_close()
+                        - ohlc_vec[position].get_close())
+                        / (prev_19_high - prev_19_low);
+                    let morning_move = (morning_move * 100.0).round() / 100.0;
+                    let result_at = ohlc_vec[position + 1].get_date().to_owned();
+                    (
+                        Some(nextday_morning_close),
+                        Some(result_morning),
+                        Some(result_allday),
+                        Some(morning_move),
+                        Some(result_at),
+                    )
+                }
+                false => (None, None, None, None, None),
+            };
 
         Ok(Self {
             code,
@@ -235,8 +226,8 @@ impl StocksWindow {
             number_of_resistance_candles,
             number_of_support_candles,
             status: status.to_owned(),
-            result_morning_close,
-            result_close,
+            result_morning,
+            result_allday,
             nextday_morning_close,
             morning_move,
             analyzed_at,
@@ -244,7 +235,83 @@ impl StocksWindow {
         })
     }
 
-    fn markdown_body_output_for_cloud(&self, afternoon: bool) -> String {
+    // fn markdown_body_output_for_cloud(&self, afternoon: bool) -> Result<String, MyError> {
+    //     let mut buffer = String::new();
+
+    //     let (current_price, latest_move) = match afternoon {
+    //         true => (
+    //             self.nextday_morning_close.unwrap(),
+    //             self.morning_move.unwrap(),
+    //         ),
+    //         false => (self.current_price, self.latest_move),
+    //     };
+
+    //     let name = match self.name.chars().count() > 5 {
+    //         true => {
+    //             let name: String = self.name.chars().take(4).collect();
+    //             name
+    //         }
+    //         false => self.name.to_owned(),
+    //     };
+
+    //     let (status, difference) = match current_price {
+    //         x if x < self.lower_bound => {
+    //             let difference = (current_price - self.lower_bound) / self.atr;
+    //             let difference = (difference * 100.0).round() / 100.0;
+
+    //             ("Below", Some(difference))
+    //         }
+    //         x if x > self.upper_bound => {
+    //             let difference = (current_price - self.upper_bound) / self.atr;
+
+    //             let difference = (difference * 100.0).round() / 100.0;
+    //             ("Above", Some(difference))
+    //         }
+    //         _ => ("Between", None),
+    //     };
+
+    //     let difference_str = match difference {
+    //         Some(difference) => format!("{}%", difference),
+    //         None => "".to_owned(),
+    //     };
+
+    //     writeln!(
+    //         buffer,
+    //         "{} {}, {}円 {}({} - {}) {}",
+    //         self.code,
+    //         name,
+    //         current_price,
+    //         status,
+    //         self.lower_bound,
+    //         self.upper_bound,
+    //         difference_str,
+    //     )?;
+
+    //     writeln!(
+    //         buffer,
+    //         "ATR: {}, Unit: {}, Diff: {} Move: {}, 必要金額: {}円",
+    //         self.atr, self.unit, self.standardized_diff, latest_move, self.required_amount
+    //     )?;
+
+    //     if self.result_allday.is_some() {
+    //         writeln!(
+    //             buffer,
+    //             "MC: {}, AC: {}",
+    //             self.result_morning.unwrap(),
+    //             self.result_allday.unwrap()
+    //         )?;
+    //     }
+
+    //     Ok(buffer)
+    // }
+
+    // fn markdown_body_output_for_cloud_default(&self) -> Result<String, MyError> {
+    //     self.markdown_body_output_for_cloud(false)
+    // }
+
+    fn markdown_body_output_for_resistance(&self, afternoon: bool) -> Result<String, MyError> {
+        let mut buffer = String::new();
+
         let (current_price, latest_move) = match afternoon {
             true => (
                 self.nextday_morning_close.unwrap(),
@@ -253,83 +320,6 @@ impl StocksWindow {
             false => (self.current_price, self.latest_move),
         };
 
-        let mut buffer = String::new();
-        let name = match self.name.chars().count() > 5 {
-            true => {
-                let name: String = self.name.chars().take(4).collect();
-                name
-            }
-            false => self.name.to_owned(),
-        };
-
-        let (status, difference) = match current_price {
-            x if x < self.lower_bound => {
-                let difference = (current_price - self.lower_bound) / self.atr;
-                let difference = (difference * 100.0).round() / 100.0;
-
-                ("Below", Some(difference))
-            }
-            x if x > self.upper_bound => {
-                let difference = (current_price - self.upper_bound) / self.atr;
-
-                let difference = (difference * 100.0).round() / 100.0;
-                ("Above", Some(difference))
-            }
-            _ => ("Between", None),
-        };
-
-        let difference_str = match difference {
-            Some(difference) => format!("{}%", difference),
-            None => "".to_owned(),
-        };
-
-        writeln!(
-            buffer,
-            "{} {}, {}円 {}({} - {}) {}",
-            self.code,
-            name,
-            current_price,
-            status,
-            self.lower_bound,
-            self.upper_bound,
-            difference_str,
-        )
-        .unwrap();
-
-        writeln!(
-            buffer,
-            "ATR: {}, Unit: {}, Diff: {} Move: {}, 必要金額: {}円",
-            self.atr, self.unit, self.standardized_diff, latest_move, self.required_amount
-        )
-        .unwrap();
-
-        if self.result_close.is_some() {
-            writeln!(
-                buffer,
-                "MC: {}, AC: {}",
-                self.result_morning_close.unwrap(),
-                self.result_close.unwrap()
-            )
-            .unwrap();
-        }
-
-        buffer
-    }
-
-    fn markdown_body_output_for_cloud_default(&self) -> String {
-        self.markdown_body_output_for_cloud(false)
-    }
-
-    fn markdown_body_output_for_resistance(&self, afternoon: bool) -> String {
-        let (current_price, latest_move) = match afternoon {
-            true => (
-                self.nextday_morning_close.unwrap(),
-                self.morning_move.unwrap(),
-            ),
-            false => (self.current_price, self.latest_move),
-        };
-
-        let mut buffer = String::new();
         let name = match self.name.chars().count() > 5 {
             true => {
                 let name: String = self.name.chars().take(4).collect();
@@ -348,29 +338,26 @@ impl StocksWindow {
             self.number_of_resistance_candles,
             self.number_of_support_candles,
             self.standardized_diff
-        )
-        .unwrap();
+        )?;
 
         writeln!(
             buffer,
             "ATR: {}, Unit: {}, Move: {}, 必要金額: {}円",
             self.atr, self.unit, latest_move, self.required_amount
-        )
-        .unwrap();
+        )?;
 
-        if self.result_close.is_some() {
+        if self.result_allday.is_some() {
             writeln!(
                 buffer,
                 "Morning: {}, Allday: {}",
-                self.result_morning_close.unwrap(),
-                self.result_close.unwrap()
-            )
-            .unwrap();
+                self.result_morning.unwrap(),
+                self.result_allday.unwrap()
+            )?;
         }
 
-        buffer
+        Ok(buffer)
     }
-    fn markdown_body_output_for_resistance_default(&self) -> String {
+    fn markdown_body_output_for_resistance_default(&self) -> Result<String, MyError> {
         self.markdown_body_output_for_resistance(false)
     }
 }
@@ -428,71 +415,68 @@ impl StocksWindowList {
         self.data.append(&mut stocks_daytrading_list.data);
     }
 
-    fn sort_by_latest_move(&mut self, absolute: bool) {
-        match absolute {
-            true => self.data.sort_by(|a, b| {
-                b.latest_move
-                    .abs()
-                    .partial_cmp(&a.latest_move.abs())
-                    .unwrap()
-            }),
-            false => self
-                .data
-                .sort_by(|a, b| b.latest_move.partial_cmp(&a.latest_move).unwrap()),
-        }
-    }
-    fn sort_by_latest_move_default(&mut self) {
-        self.sort_by_latest_move(true)
-    }
+    // fn sort_by_latest_move(&mut self, absolute: bool) {
+    //     match absolute {
+    //         true => self.data.sort_by(|a, b| {
+    //             b.latest_move
+    //                 .abs()
+    //                 .partial_cmp(&a.latest_move.abs())
+    //                 .unwrap()
+    //         }),
+    //         false => self
+    //             .data
+    //             .sort_by(|a, b| b.latest_move.partial_cmp(&a.latest_move).unwrap()),
+    //     }
+    // }
+    // fn sort_by_latest_move_default(&mut self) {
+    //     self.sort_by_latest_move(true)
+    // }
 
-    fn sort_by_morning_move(&mut self, absolute: bool) {
-        match absolute {
-            true => self.data.sort_by(|a, b| {
-                b.morning_move
-                    .unwrap()
-                    .abs()
-                    .partial_cmp(&a.morning_move.unwrap().abs())
-                    .unwrap()
-            }),
-            false => self
-                .data
-                .sort_by(|a, b| b.morning_move.partial_cmp(&a.morning_move).unwrap()),
-        }
-    }
-    fn sort_by_morning_move_default(&mut self) {
-        self.sort_by_morning_move(true)
-    }
+    // fn sort_by_morning_move(&mut self, absolute: bool) {
+    //     match absolute {
+    //         true => self.data.sort_by(|a, b| {
+    //             b.morning_move
+    //                 .unwrap()
+    //                 .abs()
+    //                 .partial_cmp(&a.morning_move.unwrap().abs())
+    //                 .unwrap()
+    //         }),
+    //         false => self
+    //             .data
+    //             .sort_by(|a, b| b.morning_move.partial_cmp(&a.morning_move).unwrap()),
+    //     }
+    // }
+    // fn sort_by_morning_move_default(&mut self) {
+    //     self.sort_by_morning_move(true)
+    // }
 
-    fn sort_by_difference(&mut self, absolute: bool) {
-        match absolute {
-            true => self.data.sort_by(|a, b| {
-                let a_difference = (a.current_price - a.lower_bound) / a.atr;
-                let b_difference = (b.current_price - b.lower_bound) / b.atr;
-                b_difference.abs().partial_cmp(&a_difference.abs()).unwrap()
-            }),
-            false => self.data.sort_by(|a, b| {
-                let a_difference = (a.current_price - a.lower_bound) / a.atr;
-                let b_difference = (b.current_price - b.lower_bound) / b.atr;
-                b_difference.partial_cmp(&a_difference).unwrap()
-            }),
-        }
-    }
+    // fn sort_by_difference(&mut self, absolute: bool) {
+    //     match absolute {
+    //         true => self.data.sort_by(|a, b| {
+    //             let a_difference = (a.current_price - a.lower_bound) / a.atr;
+    //             let b_difference = (b.current_price - b.lower_bound) / b.atr;
+    //             b_difference.abs().partial_cmp(&a_difference.abs()).unwrap()
+    //         }),
+    //         false => self.data.sort_by(|a, b| {
+    //             let a_difference = (a.current_price - a.lower_bound) / a.atr;
+    //             let b_difference = (b.current_price - b.lower_bound) / b.atr;
+    //             b_difference.partial_cmp(&a_difference).unwrap()
+    //         }),
+    //     }
+    // }
 
-    fn sort_by_difference_default(&mut self) {
-        self.sort_by_difference(true)
-    }
+    // fn sort_by_difference_default(&mut self) {
+    //     self.sort_by_difference(true)
+    // }
 
     fn sort_by_number_of_resistance_candles(&mut self) {
         self.data.retain(|x| x.standardized_diff < 0.12);
         self.data.sort_by(|a, b| {
-            // number_of_resistanceとnumber_of_supportのうち多い方を優先してソート
-            let a_max_candles = a
-                .number_of_resistance_candles
-                .max(a.number_of_support_candles);
-            let b_max_candles = b
-                .number_of_resistance_candles
-                .max(b.number_of_support_candles);
-            b_max_candles.partial_cmp(&a_max_candles).unwrap()
+            let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
+            let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
+            b_number_of_candles
+                .partial_cmp(&a_number_of_candles)
+                .unwrap()
         })
     }
 
@@ -524,78 +508,78 @@ impl StocksWindowList {
     //     ))
     // }
 
-    fn get_on_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-        let on_the_cloud = self
-            .data
-            .iter()
-            .filter(|x| {
-                let current_price = match afternoon {
-                    true => x.nextday_morning_close.unwrap(),
-                    false => x.current_price,
-                };
-                let difference = (current_price - x.upper_bound) / x.atr;
-                difference > 0.0 && difference < 0.2 && x.standardized_diff < 0.12
-            })
-            .collect::<Vec<_>>();
+    // fn get_on_the_cloud(&self, afternoon: bool) -> StocksWindowList {
+    //     let on_the_cloud = self
+    //         .data
+    //         .iter()
+    //         .filter(|x| {
+    //             let current_price = match afternoon {
+    //                 true => x.nextday_morning_close.unwrap(),
+    //                 false => x.current_price,
+    //             };
+    //             let difference = (current_price - x.upper_bound) / x.atr;
+    //             difference > 0.0 && difference < 0.2 && x.standardized_diff < 0.12
+    //         })
+    //         .collect::<Vec<_>>();
 
-        StocksWindowList::from(on_the_cloud.into_iter().cloned().collect::<Vec<_>>())
-    }
-    fn get_on_the_cloud_default(&self) -> StocksWindowList {
-        self.get_on_the_cloud(false)
-    }
+    //     StocksWindowList::from(on_the_cloud.into_iter().cloned().collect::<Vec<_>>())
+    // }
+    // fn get_on_the_cloud_default(&self) -> StocksWindowList {
+    //     self.get_on_the_cloud(false)
+    // }
 
-    fn get_between_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-        let between_the_cloud = self
-            .data
-            .iter()
-            .filter(|x| {
-                let current_price = match afternoon {
-                    true => x.nextday_morning_close.unwrap(),
-                    false => x.current_price,
-                };
-                current_price > x.lower_bound
-                    && current_price < x.upper_bound
-                    && x.standardized_diff < 0.12
-            })
-            .collect::<Vec<_>>();
+    // fn get_between_the_cloud(&self, afternoon: bool) -> StocksWindowList {
+    //     let between_the_cloud = self
+    //         .data
+    //         .iter()
+    //         .filter(|x| {
+    //             let current_price = match afternoon {
+    //                 true => x.nextday_morning_close.unwrap(),
+    //                 false => x.current_price,
+    //             };
+    //             current_price > x.lower_bound
+    //                 && current_price < x.upper_bound
+    //                 && x.standardized_diff < 0.12
+    //         })
+    //         .collect::<Vec<_>>();
 
-        StocksWindowList::from(between_the_cloud.into_iter().cloned().collect::<Vec<_>>())
-    }
+    //     StocksWindowList::from(between_the_cloud.into_iter().cloned().collect::<Vec<_>>())
+    // }
     // fn get_between_the_cloud_default(&self) -> StocksWindowList {
     //     self.get_between_the_cloud(false)
     // }
 
-    fn get_under_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-        let under_the_cloud = self
-            .data
-            .iter()
-            .filter(|x| {
-                let current_price = match afternoon {
-                    true => x.nextday_morning_close.unwrap(),
-                    false => x.current_price,
-                };
-                let difference = (current_price - x.lower_bound) / x.atr;
-                difference < 0.0 && difference > -0.2 && x.standardized_diff < 0.12
-            })
-            .collect::<Vec<_>>();
+    // fn get_under_the_cloud(&self, afternoon: bool) -> StocksWindowList {
+    //     let under_the_cloud = self
+    //         .data
+    //         .iter()
+    //         .filter(|x| {
+    //             let current_price = match afternoon {
+    //                 true => x.nextday_morning_close.unwrap(),
+    //                 false => x.current_price,
+    //             };
+    //             let difference = (current_price - x.lower_bound) / x.atr;
+    //             difference < 0.0 && difference > -0.2 && x.standardized_diff < 0.12
+    //         })
+    //         .collect::<Vec<_>>();
 
-        StocksWindowList::from(under_the_cloud.into_iter().cloned().collect::<Vec<_>>())
-    }
-    fn get_under_the_cloud_default(&self) -> StocksWindowList {
-        self.get_under_the_cloud(false)
-    }
+    //     StocksWindowList::from(under_the_cloud.into_iter().cloned().collect::<Vec<_>>())
+    // }
+    // fn get_under_the_cloud_default(&self) -> StocksWindowList {
+    //     self.get_under_the_cloud(false)
+    // }
 
-    fn get_around_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-        let mut around_the_cloud = StocksWindowList::new();
-        around_the_cloud.append(self.get_on_the_cloud(afternoon));
-        around_the_cloud.append(self.get_between_the_cloud(afternoon));
-        around_the_cloud.append(self.get_under_the_cloud(afternoon));
+    // fn get_around_the_cloud(&self, afternoon: bool) -> StocksWindowList {
+    //     let mut around_the_cloud = StocksWindowList::new();
+    //     around_the_cloud.append(self.get_on_the_cloud(afternoon));
+    //     around_the_cloud.append(self.get_between_the_cloud(afternoon));
+    //     around_the_cloud.append(self.get_under_the_cloud(afternoon));
 
-        around_the_cloud
-    }
-    fn get_around_the_cloud_default(&self) -> StocksWindowList {
-        self.get_around_the_cloud(false)
-    }
+    //     around_the_cloud
+    // }
+    // fn get_around_the_cloud_default(&self) -> StocksWindowList {
+    //     self.get_around_the_cloud(false)
+    // }
 
     // fn output_for_markdown_window(&self, date: &str) -> Result<Markdown, MyError> {
     //     let mut markdown = Markdown::new();
@@ -637,38 +621,38 @@ impl StocksWindowList {
     //     Ok(markdown)
     // }
 
-    pub fn output_for_markdown_cloud(
-        &self,
-        afternoon: bool,
-    ) -> Result<(Markdown, String), MyError> {
-        let date = match afternoon {
-            true => self.data[0].result_at.clone().unwrap(),
-            false => self.data[0].analyzed_at.clone(),
-        };
+    // pub fn output_for_markdown_cloud(
+    //     &self,
+    //     afternoon: bool,
+    // ) -> Result<(Markdown, String), MyError> {
+    //     let date = match afternoon {
+    //         true => self.data[0].result_at.clone().unwrap(),
+    //         false => self.data[0].analyzed_at.clone(),
+    //     };
 
-        let title = match afternoon {
-            true => "This afternoon",
-            false => "Nextday",
-        };
+    //     let title = match afternoon {
+    //         true => "This afternoon",
+    //         false => "Nextday",
+    //     };
 
-        let mut markdown = Markdown::new();
-        markdown.h1(&date)?;
-        markdown.h2(title)?;
+    //     let mut markdown = Markdown::new();
+    //     markdown.h1(&date)?;
+    //     markdown.h2(title)?;
 
-        for stocks_window in &self.data {
-            match afternoon {
-                true => markdown.body(&stocks_window.markdown_body_output_for_cloud(true))?,
-                false => markdown.body(&stocks_window.markdown_body_output_for_cloud_default())?,
-            }
-        }
+    //     for stocks_window in &self.data {
+    //         match afternoon {
+    //             true => markdown.body(&stocks_window.markdown_body_output_for_cloud(true)?)?,
+    //             false => markdown.body(&stocks_window.markdown_body_output_for_cloud_default()?)?,
+    //         }
+    //     }
 
-        debug!("{}", markdown.buffer());
+    //     debug!("{}", markdown.buffer());
 
-        Ok((markdown, date))
-    }
-    pub fn output_for_markdown_cloud_default(&self) -> Result<(Markdown, String), MyError> {
-        self.output_for_markdown_cloud(false)
-    }
+    //     Ok((markdown, date))
+    // }
+    // pub fn output_for_markdown_cloud_default(&self) -> Result<(Markdown, String), MyError> {
+    //     self.output_for_markdown_cloud(false)
+    // }
 
     pub fn output_for_markdown_resistance(
         &self,
@@ -685,9 +669,9 @@ impl StocksWindowList {
 
         for stocks_window in &self.data {
             match afternoon {
-                true => markdown.body(&stocks_window.markdown_body_output_for_resistance(true))?,
+                true => markdown.body(&stocks_window.markdown_body_output_for_resistance(true)?)?,
                 false => {
-                    markdown.body(&stocks_window.markdown_body_output_for_resistance_default())?
+                    markdown.body(&stocks_window.markdown_body_output_for_resistance_default()?)?
                 }
             }
         }
@@ -788,37 +772,37 @@ impl StocksWindowList {
     //     Ok(())
     // }
 
-    pub fn for_cloud_strategy(&self) -> Result<(), MyError> {
-        let mut date_to_stocks: HashMap<_, Vec<_>> = HashMap::new();
+    // pub fn for_cloud_strategy(&self) -> Result<(), MyError> {
+    //     let mut date_to_stocks: HashMap<_, Vec<_>> = HashMap::new();
 
-        for stocks_window in &self.data {
-            date_to_stocks
-                .entry(stocks_window.analyzed_at.clone())
-                .or_default()
-                .push(stocks_window.clone());
-        }
+    //     for stocks_window in &self.data {
+    //         date_to_stocks
+    //             .entry(stocks_window.analyzed_at.clone())
+    //             .or_default()
+    //             .push(stocks_window.clone());
+    //     }
 
-        for (_, stocks_window_list) in date_to_stocks {
-            let stocks_window_list = StocksWindowList::from(stocks_window_list);
-            let mut around_the_cloud = stocks_window_list.get_around_the_cloud_default();
-            around_the_cloud.sort_by_latest_move(true);
+    //     for (_, stocks_window_list) in date_to_stocks {
+    //         let stocks_window_list = StocksWindowList::from(stocks_window_list);
+    //         let mut around_the_cloud = stocks_window_list.get_around_the_cloud_default();
+    //         around_the_cloud.sort_by_latest_move(true);
 
-            let (markdown, analyzed_at) = around_the_cloud.output_for_markdown_cloud_default()?;
-            let path = crate::my_file_io::get_jquants_path(JquantsStyle::Cloud, &analyzed_at)?;
-            markdown.write_to_file(&path)?;
+    //         let (markdown, analyzed_at) = around_the_cloud.output_for_markdown_cloud_default()?;
+    //         let path = crate::my_file_io::get_jquants_path(JquantsStyle::Cloud, &analyzed_at)?;
+    //         markdown.write_to_file(&path)?;
 
-            if stocks_window_list.data[0].nextday_morning_close.is_some() {
-                let mut afternoon_list = stocks_window_list.get_around_the_cloud(true);
-                afternoon_list.sort_by_morning_move(true);
-                let (markdown, result_at) = afternoon_list.output_for_markdown_cloud(true)?;
-                let path =
-                    crate::my_file_io::get_jquants_path(JquantsStyle::Afternoon, &result_at)?;
-                markdown.write_to_file(&path)?;
-            }
-        }
+    //         if stocks_window_list.data[0].nextday_morning_close.is_some() {
+    //             let mut afternoon_list = stocks_window_list.get_around_the_cloud(true);
+    //             afternoon_list.sort_by_morning_move(true);
+    //             let (markdown, result_at) = afternoon_list.output_for_markdown_cloud(true)?;
+    //             let path =
+    //                 crate::my_file_io::get_jquants_path(JquantsStyle::Afternoon, &result_at)?;
+    //             markdown.write_to_file(&path)?;
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub fn for_resistance_strategy(&self) -> Result<(), MyError> {
         let mut date_to_stocks: HashMap<_, Vec<_>> = HashMap::new();

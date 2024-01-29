@@ -34,10 +34,8 @@ pub fn load_nikkei225_list() -> Result<Vec<Nikkei225>, MyError> {
     };
     let mut nikkei225_vec = Vec::new();
     for result in rdr.deserialize() {
-        let nikkei225: Nikkei225 = match result {
-            Ok(nikkei225) => nikkei225,
-            Err(e) => return Err(MyError::Anyhow(anyhow!(e.to_string()))),
-        };
+        let nikkei225 = result.map_err(|e| MyError::Anyhow(anyhow!(e.to_string())))?;
+
         nikkei225_vec.push(nikkei225);
     }
     debug!("{:?}", nikkei225_vec);
@@ -100,7 +98,7 @@ pub fn get_topix_ohlc_file_path() -> Result<PathBuf, MyError> {
 pub enum JquantsStyle {
     // Break,
     // Window,
-    Cloud,
+    // Cloud,
     Afternoon,
     Resistance,
 }
@@ -109,7 +107,7 @@ pub fn get_jquants_path(jquants_style: JquantsStyle, file_name: &str) -> Result<
     let dir_name = match jquants_style {
         // JquantsStyle::Break => "jquants_break",
         // JquantsStyle::Window => "jquants_window",
-        JquantsStyle::Cloud => "jquants_cloud",
+        // JquantsStyle::Cloud => "jquants_cloud",
         JquantsStyle::Afternoon => "jquants_afternoon",
         JquantsStyle::Resistance => "jquants_resistance",
     };
