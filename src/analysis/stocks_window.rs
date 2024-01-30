@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use chrono::{Duration, NaiveDate};
 use log::{debug, error, info};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::{fmt::Write, time::Instant};
@@ -853,6 +854,73 @@ pub async fn create_stocks_window_list(from: &str, to: &str) -> Result<StocksWin
                     return Err(MyError::Anyhow(anyhow!("{}", e)));
                 }
             };
+        let mut stocks_window_list = StocksWindowList::new();
+        stocks_window_list.push(ohlc_vec, code, name, unit, &from, &to);
+
+        Ok(stocks_window_list)
+    }
+
+    let nikkei225 = match load_nikkei225_list() {
+        Ok(res) => res,
+        Err(e) => {
+            error!("{}", e);
+            return Err(e);
+        }
+    };
+    info!("Nikkei225 has been loaded");
+
+    let config = crate::config::GdriveJson::new()?;
+    let unit = config.jquants_unit();
+    info!("unit: {}", unit);
+
+    let start_time = Instant::now();
+
+    let handles = nikkei225
+        .into_iter()
+        .map(|row| tokio::spawn(inner(row, unit, from.to_owned(), to.to_owned())))
+        .collect::<Vec<_>>();
+
+    let results = futures::future::join_all(handles).await;
+
+    let mut stocks_daytrading_list = StocksWindowList::new();
+    for result in results {
+        match result {
+            Ok(res) => {
+                let stock = res.unwrap();
+                stocks_daytrading_list.append(stock);
+            }
+            Err(e) => {
+                error!("{}", e);
+                return Err(MyError::Anyhow(anyhow!("{}", e)));
+            }
+        }
+    }
+
+    let end_time = Instant::now();
+
+    info!("Elapsed time: {:?}", end_time - start_time);
+    Ok(stocks_daytrading_list)
+}
+
+pub async fn create_stocks_window_list_db(
+    from: &str,
+    to: &str,
+) -> Result<StocksWindowList, MyError> {
+    async fn inner(
+        row: Nikkei225,
+        unit: f64,
+        from: String,
+        to: String,
+    ) -> Result<StocksWindowList, MyError> {
+        let code = row.get_code();
+        let name = row.get_name();
+        let conn = crate::database::stocks_ohlc::open_db()?;
+
+        let records = crate::database::stocks_ohlc::select_by_code(&conn, code)?;
+        let ohlc_vec: Vec<OhlcPremium> = records
+            .into_iter()
+            .map(|x| x.get_inner())
+            .collect::<Vec<_>>();
         let mut stocks_window_list = StocksWindowList::new();
         stocks_window_list.push(ohlc_vec, code, name, unit, &from, &to);
 

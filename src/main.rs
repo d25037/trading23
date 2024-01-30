@@ -75,7 +75,16 @@ async fn main() {
                     .await
                     .unwrap();
 
-                match jquants::live::fetch_nikkei225(args.force).await {
+                // match jquants::fetcher::fetch_nikkei225(args.force).await {
+                //     Ok(_) => {
+                //         info!("fetch_nikkei225 success");
+                //     }
+                //     Err(e) => match e {
+                //         MyError::NotLatestData => return error!("{}", e),
+                //         _ => return error!("fetch_nikkei225 failed: {}", e),
+                //     },
+                // };
+                match jquants::fetcher::fetch_nikkei225_db(args.force).await {
                     Ok(_) => {
                         info!("fetch_nikkei225 success");
                     }
@@ -92,16 +101,35 @@ async fn main() {
                     .format("%Y-%m-%d")
                     .to_string();
 
+                // let stocks_window_list =
+                //     match analysis::stocks_window::create_stocks_window_list(&day_before_5, &today)
+                //         .await
+                //     {
+                //         Ok(output) => output,
+                //         Err(e) => {
+                //             error!("create_stocks_window_list failed: {}", e);
+                //             line_notify::send_message(&client, "create_stocks_window_list failed")
+                //                 .await
+                //                 .unwrap();
+                //             return;
+                //         }
+                //     };
                 let stocks_window_list =
-                    match analysis::stocks_window::create_stocks_window_list(&day_before_5, &today)
-                        .await
+                    match analysis::stocks_window::create_stocks_window_list_db(
+                        &day_before_5,
+                        &today,
+                    )
+                    .await
                     {
                         Ok(output) => output,
                         Err(e) => {
-                            error!("create_stocks_window_list failed: {}", e);
-                            line_notify::send_message(&client, "create_stocks_window_list failed")
-                                .await
-                                .unwrap();
+                            error!("create_stocks_window_list_db failed: {}", e);
+                            line_notify::send_message(
+                                &client,
+                                "create_stocks_window_list_db failed",
+                            )
+                            .await
+                            .unwrap();
                             return;
                         }
                     };
@@ -126,7 +154,7 @@ async fn main() {
                     .await
                     .unwrap();
 
-                let prices_am = match jquants::live::PricesAm::new(&client, true).await {
+                let prices_am = match jquants::fetcher::PricesAm::new(&client, true).await {
                     Ok(prices_am) => prices_am,
                     Err(e) => {
                         error!("fetch morning market failed: {}", e);
@@ -137,16 +165,33 @@ async fn main() {
                         return;
                     }
                 };
+                // let stocks_afternoon_list =
+                //     match analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(
+                //         &prices_am,
+                //     ) {
+                //         Ok(output) => output,
+                //         Err(e) => {
+                //             error!("StocksAfternoonList::from_nikkei225 failed: {}", e);
+                //             line_notify::send_message(
+                //                 &client,
+                //                 "StocksAfternoonList::from_nikkei225 failed",
+                //             )
+                //             .await
+                //             .unwrap();
+                //             return;
+                //         }
+                //     };
+
                 let stocks_afternoon_list =
-                    match analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(
+                    match analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225_db(
                         &prices_am,
                     ) {
                         Ok(output) => output,
                         Err(e) => {
-                            error!("StocksAfternoonList::from_nikkei225 failed: {}", e);
+                            error!("StocksAfternoonList::from_nikkei225_db failed: {}", e);
                             line_notify::send_message(
                                 &client,
-                                "StocksAfternoonList::from_nikkei225 failed",
+                                "StocksAfternoonList::from_nikkei225_db failed",
                             )
                             .await
                             .unwrap();
@@ -207,32 +252,37 @@ async fn main() {
                 //     .await
                 //     .unwrap();
 
-                let from = "2023-12-01";
-                let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                // match jquants::fetcher::fetch_nikkei225_db(true).await {
+                //     Ok(_) => info!("fetch_nikkei225 success"),
+                //     Err(e) => return error!("fetch_nikkei225 failed: {}", e),
+                // };
 
-                let stocks_window_list =
-                    analysis::stocks_window::create_stocks_window_list(from, &today)
-                        .await
-                        .unwrap();
+                // let from = "2023-12-01";
+                // let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-                stocks_window_list.for_resistance_strategy().unwrap();
+                // let stocks_window_list =
+                //     analysis::stocks_window::create_stocks_window_list(from, &today)
+                //         .await
+                //         .unwrap();
 
-                let prices_am = match jquants::live::PricesAm::new(&client, true).await {
-                    Ok(prices_am) => prices_am,
-                    Err(e) => {
-                        error!("fetch morning market failed: {}", e);
+                // stocks_window_list.for_resistance_strategy().unwrap();
 
-                        line_notify::send_message(&client, "fetch morning market failed")
-                            .await
-                            .unwrap();
-                        return;
-                    }
-                };
-                let aaa =
-                    analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(&prices_am)
-                        .unwrap();
+                // let prices_am = match jquants::fetcher::PricesAm::new(&client, true).await {
+                //     Ok(prices_am) => prices_am,
+                //     Err(e) => {
+                //         error!("fetch morning market failed: {}", e);
 
-                aaa.for_resistance_strategy().unwrap();
+                //         line_notify::send_message(&client, "fetch morning market failed")
+                //             .await
+                //             .unwrap();
+                //         return;
+                //     }
+                // };
+                // let aaa =
+                //     analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(&prices_am)
+                //         .unwrap();
+
+                // aaa.for_resistance_strategy().unwrap();
             }
         }
 

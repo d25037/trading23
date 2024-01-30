@@ -1,4 +1,3 @@
-use crate::markdown::Markdown;
 use crate::my_file_io::Nikkei225;
 use crate::my_file_io::{get_fetched_ohlc_file_path, load_nikkei225_list, AssetType};
 use crate::{analysis::live::OhlcPremium, my_error::MyError};
@@ -12,7 +11,7 @@ use statrs::statistics::Statistics;
 use std::fmt::Write;
 use std::time::Instant;
 
-use super::backtesting_topix::{TopixDailyWindowList, TopixDailyWindowList2};
+use super::backtesting_topix::TopixDailyWindowList;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct StocksDaytrading {
@@ -255,13 +254,13 @@ impl StocksDaytradingList {
         self.data.append(&mut stocks_daytrading_list.data);
     }
 
-    pub fn sort_by_standardized_diff(&mut self) {
-        self.data.sort_by(|a, b| {
-            a.standardized_diff
-                .partial_cmp(&b.standardized_diff)
-                .unwrap()
-        });
-    }
+    // pub fn sort_by_standardized_diff(&mut self) {
+    //     self.data.sort_by(|a, b| {
+    //         a.standardized_diff
+    //             .partial_cmp(&b.standardized_diff)
+    //             .unwrap()
+    //     });
+    // }
 
     // pub fn output_for_markdown(&self, date: &str) -> Result<Markdown, MyError> {
     //     let mut markdown = Markdown::new();
@@ -313,12 +312,12 @@ impl StocksDaytradingList {
                 .collect::<Vec<_>>(),
         );
 
-        let afternoon_open = TTestResult::new(
-            self.data
-                .iter()
-                .map(|stocks_daytrading| stocks_daytrading.result_afternoon_open.unwrap_or(0.0))
-                .collect::<Vec<_>>(),
-        );
+        // let afternoon_open = TTestResult::new(
+        //     self.data
+        //         .iter()
+        //         .map(|stocks_daytrading| stocks_daytrading.result_afternoon_open.unwrap_or(0.0))
+        //         .collect::<Vec<_>>(),
+        // );
 
         let close = TTestResult::new(
             self.data
@@ -327,244 +326,244 @@ impl StocksDaytradingList {
                 .collect::<Vec<_>>(),
         );
 
-        let threshold = 0.7;
+        // let threshold = 0.7;
 
-        let close_with_mc_mc_loss_cut = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
+        // let close_with_mc_mc_loss_cut = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
 
-        let close_with_mc_ao_loss_cut = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
+        // let close_with_mc_ao_loss_cut = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
 
-        let close_with_ao_ao_loss_cut = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
+        // let close_with_ao_ao_loss_cut = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
 
-        let close_with_mc_mc_rikaku = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
-        let close_with_mc_ao_rikaku = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
+        // let close_with_mc_mc_rikaku = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
+        // let close_with_mc_ao_rikaku = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
 
-        let close_with_ao_ao_rikaku = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
+        // let close_with_ao_ao_rikaku = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
 
-        let close_with_loss_cut_and_rikaku_1 = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                            < -threshold
-                        {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold
-                        {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
+        // let close_with_loss_cut_and_rikaku_1 = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                     < -threshold
+        //                 {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold
+        //                 {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
 
-        let close_with_loss_cut_and_rikaku_2 = if morning_close.get_mean() > 0.0 {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold
-                        {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            TTestResult::new(
-                self.data
-                    .iter()
-                    .map(|stocks_daytrading| {
-                        if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
-                            stocks_daytrading.result_morning_close.unwrap_or(0.0)
-                        } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                            < -threshold
-                        {
-                            stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
-                        } else {
-                            stocks_daytrading.result_close.unwrap_or(0.0)
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
+        // let close_with_loss_cut_and_rikaku_2 = if morning_close.get_mean() > 0.0 {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) < -threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0) > threshold
+        //                 {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // } else {
+        //     TTestResult::new(
+        //         self.data
+        //             .iter()
+        //             .map(|stocks_daytrading| {
+        //                 if stocks_daytrading.result_morning_close.unwrap_or(0.0) > threshold {
+        //                     stocks_daytrading.result_morning_close.unwrap_or(0.0)
+        //                 } else if stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                     < -threshold
+        //                 {
+        //                     stocks_daytrading.result_afternoon_open.unwrap_or(0.0)
+        //                 } else {
+        //                     stocks_daytrading.result_close.unwrap_or(0.0)
+        //                 }
+        //             })
+        //             .collect::<Vec<_>>(),
+        //     )
+        // };
 
         let mut buffer = String::new();
         writeln!(buffer, "morning_close: {}", morning_close).unwrap();
@@ -761,186 +760,186 @@ impl StocksDaytradingList {
         buffer
     }
 
-    pub fn get_windows_related_result_3(
-        &self,
-        status: Status,
-        topix_daily_window_list: &TopixDailyWindowList2,
-    ) -> String {
-        let mut buffer = String::new();
-        writeln!(buffer).unwrap();
-        writeln!(buffer, "<{:?}>", status).unwrap();
+    // pub fn get_windows_related_result_3(
+    //     &self,
+    //     status: Status,
+    //     topix_daily_window_list: &TopixDailyWindowList2,
+    // ) -> String {
+    //     let mut buffer = String::new();
+    //     writeln!(buffer).unwrap();
+    //     writeln!(buffer, "<{:?}>", status).unwrap();
 
-        let limit = [(0.0, 0.09), (0.09, 0.115), (0.115, 0.4)];
+    //     let limit = [(0.0, 0.09), (0.09, 0.115), (0.115, 0.4)];
 
-        writeln!(buffer, "Strong Positive").unwrap();
-        for (lower_limit, upper_limit) in limit.iter() {
-            let data = self.data.clone();
-            let strong_positive = data
-                .into_iter()
-                .filter(|stocks_daytrading| {
-                    stocks_daytrading.status == status
-                        && topix_daily_window_list
-                            .get_strong_positive()
-                            .contains(&stocks_daytrading.analyzed_at)
-                        && (*lower_limit..*upper_limit)
-                            .contains(&stocks_daytrading.standardized_diff)
-                })
-                .collect::<Vec<_>>();
-            let strong_positive_list = StocksDaytradingList::from_vec(strong_positive);
-            writeln!(
-                buffer,
-                "{}-{}: N={}",
-                lower_limit,
-                upper_limit,
-                strong_positive_list.data.len(),
-                // strong_positive_list.t_test()
-            )
-            .unwrap();
-            writeln!(buffer, "{}", strong_positive_list.t_test()).unwrap();
-        }
+    //     writeln!(buffer, "Strong Positive").unwrap();
+    //     for (lower_limit, upper_limit) in limit.iter() {
+    //         let data = self.data.clone();
+    //         let strong_positive = data
+    //             .into_iter()
+    //             .filter(|stocks_daytrading| {
+    //                 stocks_daytrading.status == status
+    //                     && topix_daily_window_list
+    //                         .get_strong_positive()
+    //                         .contains(&stocks_daytrading.analyzed_at)
+    //                     && (*lower_limit..*upper_limit)
+    //                         .contains(&stocks_daytrading.standardized_diff)
+    //             })
+    //             .collect::<Vec<_>>();
+    //         let strong_positive_list = StocksDaytradingList::from_vec(strong_positive);
+    //         writeln!(
+    //             buffer,
+    //             "{}-{}: N={}",
+    //             lower_limit,
+    //             upper_limit,
+    //             strong_positive_list.data.len(),
+    //             // strong_positive_list.t_test()
+    //         )
+    //         .unwrap();
+    //         writeln!(buffer, "{}", strong_positive_list.t_test()).unwrap();
+    //     }
 
-        writeln!(buffer).unwrap();
-        writeln!(buffer, "Moderate Positive").unwrap();
-        for (lower_limit, upper_limit) in limit.iter() {
-            let data = self.data.clone();
-            let strong_positive = data
-                .into_iter()
-                .filter(|stocks_daytrading| {
-                    stocks_daytrading.status == status
-                        && topix_daily_window_list
-                            .get_moderate_positive()
-                            .contains(&stocks_daytrading.analyzed_at)
-                        && (*lower_limit..*upper_limit)
-                            .contains(&stocks_daytrading.standardized_diff)
-                })
-                .collect::<Vec<_>>();
-            let strong_positive_list = StocksDaytradingList::from_vec(strong_positive);
-            writeln!(
-                buffer,
-                "{}-{}: N={}",
-                lower_limit,
-                upper_limit,
-                strong_positive_list.data.len(),
-                // strong_positive_list.t_test()
-            )
-            .unwrap();
-            writeln!(buffer, "{}", strong_positive_list.t_test()).unwrap();
-        }
+    //     writeln!(buffer).unwrap();
+    //     writeln!(buffer, "Moderate Positive").unwrap();
+    //     for (lower_limit, upper_limit) in limit.iter() {
+    //         let data = self.data.clone();
+    //         let strong_positive = data
+    //             .into_iter()
+    //             .filter(|stocks_daytrading| {
+    //                 stocks_daytrading.status == status
+    //                     && topix_daily_window_list
+    //                         .get_moderate_positive()
+    //                         .contains(&stocks_daytrading.analyzed_at)
+    //                     && (*lower_limit..*upper_limit)
+    //                         .contains(&stocks_daytrading.standardized_diff)
+    //             })
+    //             .collect::<Vec<_>>();
+    //         let strong_positive_list = StocksDaytradingList::from_vec(strong_positive);
+    //         writeln!(
+    //             buffer,
+    //             "{}-{}: N={}",
+    //             lower_limit,
+    //             upper_limit,
+    //             strong_positive_list.data.len(),
+    //             // strong_positive_list.t_test()
+    //         )
+    //         .unwrap();
+    //         writeln!(buffer, "{}", strong_positive_list.t_test()).unwrap();
+    //     }
 
-        writeln!(buffer).unwrap();
-        writeln!(buffer, "Mild Positive").unwrap();
-        for (lower_limit, upper_limit) in limit.iter() {
-            let data = self.data.clone();
-            let mild_positive = data
-                .into_iter()
-                .filter(|stocks_daytrading| {
-                    stocks_daytrading.status == status
-                        && topix_daily_window_list
-                            .get_mild_positive()
-                            .contains(&stocks_daytrading.analyzed_at)
-                        && (*lower_limit..*upper_limit)
-                            .contains(&stocks_daytrading.standardized_diff)
-                })
-                .collect::<Vec<_>>();
-            let mild_positive_list = StocksDaytradingList::from_vec(mild_positive);
-            writeln!(
-                buffer,
-                "{}-{}: N={}",
-                lower_limit,
-                upper_limit,
-                mild_positive_list.data.len(),
-                // mild_positive_list.t_test()
-            )
-            .unwrap();
-            writeln!(buffer, "{}", mild_positive_list.t_test()).unwrap();
-        }
+    //     writeln!(buffer).unwrap();
+    //     writeln!(buffer, "Mild Positive").unwrap();
+    //     for (lower_limit, upper_limit) in limit.iter() {
+    //         let data = self.data.clone();
+    //         let mild_positive = data
+    //             .into_iter()
+    //             .filter(|stocks_daytrading| {
+    //                 stocks_daytrading.status == status
+    //                     && topix_daily_window_list
+    //                         .get_mild_positive()
+    //                         .contains(&stocks_daytrading.analyzed_at)
+    //                     && (*lower_limit..*upper_limit)
+    //                         .contains(&stocks_daytrading.standardized_diff)
+    //             })
+    //             .collect::<Vec<_>>();
+    //         let mild_positive_list = StocksDaytradingList::from_vec(mild_positive);
+    //         writeln!(
+    //             buffer,
+    //             "{}-{}: N={}",
+    //             lower_limit,
+    //             upper_limit,
+    //             mild_positive_list.data.len(),
+    //             // mild_positive_list.t_test()
+    //         )
+    //         .unwrap();
+    //         writeln!(buffer, "{}", mild_positive_list.t_test()).unwrap();
+    //     }
 
-        writeln!(buffer).unwrap();
-        writeln!(buffer, "Mild Negative").unwrap();
-        for (lower_limit, upper_limit) in limit.iter() {
-            let data = self.data.clone();
-            let mild_negative = data
-                .into_iter()
-                .filter(|stocks_daytrading| {
-                    stocks_daytrading.status == status
-                        && topix_daily_window_list
-                            .get_mild_negative()
-                            .contains(&stocks_daytrading.analyzed_at)
-                        && (*lower_limit..*upper_limit)
-                            .contains(&stocks_daytrading.standardized_diff)
-                })
-                .collect::<Vec<_>>();
-            let mild_negative_list = StocksDaytradingList::from_vec(mild_negative);
-            writeln!(
-                buffer,
-                "{}-{}: N={}",
-                lower_limit,
-                upper_limit,
-                mild_negative_list.data.len(),
-                // mild_negative_list.t_test()
-            )
-            .unwrap();
-            writeln!(buffer, "{}", mild_negative_list.t_test()).unwrap();
-        }
+    //     writeln!(buffer).unwrap();
+    //     writeln!(buffer, "Mild Negative").unwrap();
+    //     for (lower_limit, upper_limit) in limit.iter() {
+    //         let data = self.data.clone();
+    //         let mild_negative = data
+    //             .into_iter()
+    //             .filter(|stocks_daytrading| {
+    //                 stocks_daytrading.status == status
+    //                     && topix_daily_window_list
+    //                         .get_mild_negative()
+    //                         .contains(&stocks_daytrading.analyzed_at)
+    //                     && (*lower_limit..*upper_limit)
+    //                         .contains(&stocks_daytrading.standardized_diff)
+    //             })
+    //             .collect::<Vec<_>>();
+    //         let mild_negative_list = StocksDaytradingList::from_vec(mild_negative);
+    //         writeln!(
+    //             buffer,
+    //             "{}-{}: N={}",
+    //             lower_limit,
+    //             upper_limit,
+    //             mild_negative_list.data.len(),
+    //             // mild_negative_list.t_test()
+    //         )
+    //         .unwrap();
+    //         writeln!(buffer, "{}", mild_negative_list.t_test()).unwrap();
+    //     }
 
-        writeln!(buffer).unwrap();
-        writeln!(buffer, "Moderate Negative").unwrap();
-        for (lower_limit, upper_limit) in limit.iter() {
-            let data = self.data.clone();
-            let mild_negative = data
-                .into_iter()
-                .filter(|stocks_daytrading| {
-                    stocks_daytrading.status == status
-                        && topix_daily_window_list
-                            .get_moderate_negative()
-                            .contains(&stocks_daytrading.analyzed_at)
-                        && (*lower_limit..*upper_limit)
-                            .contains(&stocks_daytrading.standardized_diff)
-                })
-                .collect::<Vec<_>>();
-            let mild_negative_list = StocksDaytradingList::from_vec(mild_negative);
-            writeln!(
-                buffer,
-                "{}-{}: N={}",
-                lower_limit,
-                upper_limit,
-                mild_negative_list.data.len(),
-                // mild_negative_list.t_test()
-            )
-            .unwrap();
-            writeln!(buffer, "{}", mild_negative_list.t_test()).unwrap();
-        }
+    //     writeln!(buffer).unwrap();
+    //     writeln!(buffer, "Moderate Negative").unwrap();
+    //     for (lower_limit, upper_limit) in limit.iter() {
+    //         let data = self.data.clone();
+    //         let mild_negative = data
+    //             .into_iter()
+    //             .filter(|stocks_daytrading| {
+    //                 stocks_daytrading.status == status
+    //                     && topix_daily_window_list
+    //                         .get_moderate_negative()
+    //                         .contains(&stocks_daytrading.analyzed_at)
+    //                     && (*lower_limit..*upper_limit)
+    //                         .contains(&stocks_daytrading.standardized_diff)
+    //             })
+    //             .collect::<Vec<_>>();
+    //         let mild_negative_list = StocksDaytradingList::from_vec(mild_negative);
+    //         writeln!(
+    //             buffer,
+    //             "{}-{}: N={}",
+    //             lower_limit,
+    //             upper_limit,
+    //             mild_negative_list.data.len(),
+    //             // mild_negative_list.t_test()
+    //         )
+    //         .unwrap();
+    //         writeln!(buffer, "{}", mild_negative_list.t_test()).unwrap();
+    //     }
 
-        writeln!(buffer).unwrap();
-        writeln!(buffer, "Strong Negative").unwrap();
-        for (lower_limit, upper_limit) in limit.iter() {
-            let data = self.data.clone();
-            let strong_negative = data
-                .into_iter()
-                .filter(|stocks_daytrading| {
-                    stocks_daytrading.status == status
-                        && topix_daily_window_list
-                            .get_strong_negative()
-                            .contains(&stocks_daytrading.analyzed_at)
-                        && (*lower_limit..*upper_limit)
-                            .contains(&stocks_daytrading.standardized_diff)
-                })
-                .collect::<Vec<_>>();
-            let strong_negative_list = StocksDaytradingList::from_vec(strong_negative);
-            writeln!(
-                buffer,
-                "{}-{}: N={}",
-                lower_limit,
-                upper_limit,
-                strong_negative_list.data.len(),
-                // strong_negative_list.t_test()
-            )
-            .unwrap();
-            writeln!(buffer, "{}", strong_negative_list.t_test()).unwrap();
-        }
+    //     writeln!(buffer).unwrap();
+    //     writeln!(buffer, "Strong Negative").unwrap();
+    //     for (lower_limit, upper_limit) in limit.iter() {
+    //         let data = self.data.clone();
+    //         let strong_negative = data
+    //             .into_iter()
+    //             .filter(|stocks_daytrading| {
+    //                 stocks_daytrading.status == status
+    //                     && topix_daily_window_list
+    //                         .get_strong_negative()
+    //                         .contains(&stocks_daytrading.analyzed_at)
+    //                     && (*lower_limit..*upper_limit)
+    //                         .contains(&stocks_daytrading.standardized_diff)
+    //             })
+    //             .collect::<Vec<_>>();
+    //         let strong_negative_list = StocksDaytradingList::from_vec(strong_negative);
+    //         writeln!(
+    //             buffer,
+    //             "{}-{}: N={}",
+    //             lower_limit,
+    //             upper_limit,
+    //             strong_negative_list.data.len(),
+    //             // strong_negative_list.t_test()
+    //         )
+    //         .unwrap();
+    //         writeln!(buffer, "{}", strong_negative_list.t_test()).unwrap();
+    //     }
 
-        buffer
-    }
+    //     buffer
+    // }
 
     // t_test
 }

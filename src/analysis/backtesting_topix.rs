@@ -1,8 +1,8 @@
-use crate::jquants::live::Topix;
+use crate::jquants::fetcher::Topix;
 use crate::my_error::MyError;
 use chrono::{Datelike, NaiveDate};
 use log::info;
-use reqwest::Client;
+// use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fs::File;
@@ -24,13 +24,13 @@ pub struct BacktestingTopixList {
     data: Vec<BacktestingTopix>,
 }
 impl BacktestingTopixList {
-    pub async fn from_fetch_topix(client: &Client) -> Result<Self, MyError> {
-        let topix = Topix::new(client).await?;
+    // pub async fn from_fetch_topix(client: &Client) -> Result<Self, MyError> {
+    //     let topix = Topix::new(client).await?;
 
-        Ok(Self {
-            data: Self::into_backtesting_topix_list(topix),
-        })
-    }
+    //     Ok(Self {
+    //         data: Self::into_backtesting_topix_list(topix),
+    //     })
+    // }
 
     pub fn from_json_file() -> Result<Self, MyError> {
         let path = crate::my_file_io::get_topix_ohlc_file_path().unwrap();

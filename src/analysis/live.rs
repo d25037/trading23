@@ -47,6 +47,7 @@ impl Ohlc {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct OhlcPremium {
+    code: i32,
     date: String,
     open: f64,
     high: f64,
@@ -58,6 +59,7 @@ pub struct OhlcPremium {
 
 impl OhlcPremium {
     pub fn new(
+        code: i32,
         date: String,
         open: f64,
         high: f64,
@@ -67,6 +69,7 @@ impl OhlcPremium {
         afternoon_open: f64,
     ) -> Self {
         Self {
+            code,
             date,
             open,
             high,
@@ -78,6 +81,9 @@ impl OhlcPremium {
     }
 
     //getters
+    pub fn get_code(&self) -> i32 {
+        self.code
+    }
     pub fn get_date(&self) -> &str {
         self.date.as_str()
     }

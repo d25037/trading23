@@ -1,4 +1,4 @@
-use crate::analysis::live::OhlcAnalyzer;
+use crate::{analysis::live::OhlcAnalyzer, my_error::MyError};
 use anyhow::Result;
 use chrono::{Local, TimeZone};
 use log::info;
@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt::Write, path::Path};
 
-pub fn open_db() -> Result<Connection> {
+pub fn open_db() -> Result<Connection, MyError> {
     let gdrive_path = env::var("GDRIVE_PATH")?;
     let sqlite_path = Path::new(&gdrive_path)
         .join("trading23")

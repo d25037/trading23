@@ -1,7 +1,7 @@
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 
-use crate::jquants::live::{PricesAm, PricesAmInner};
+use crate::jquants::fetcher::{PricesAm, PricesAmInner};
 use crate::markdown::Markdown;
 use crate::my_error::MyError;
 use crate::my_file_io::{get_fetched_ohlc_file_path, load_nikkei225_list, AssetType, JquantsStyle};
@@ -253,6 +253,56 @@ impl StocksAfternoonList {
                             return Err(MyError::Anyhow(anyhow!("{}", e)));
                         }
                     };
+                let stock_am = prices_am.get_stock_am(code)?;
+                let stocks_afternoon = match StocksAfternoon::from_vec(
+                    &ohlc_vec, stock_am, code, name, unit, &today,
+                ) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        error!("{}", e);
+                        return Err(e);
+                    }
+                };
+                Ok(stocks_afternoon)
+            })
+            .collect::<Result<Vec<StocksAfternoon>, MyError>>()
+            .map(Self::from_vec);
+
+        result
+    }
+
+    pub fn from_nikkei225_db(prices_am: &PricesAm) -> Result<Self, MyError> {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+        let nikkei225 = match load_nikkei225_list() {
+            Ok(res) => res,
+            Err(e) => {
+                error!("{}", e);
+                return Err(e);
+            }
+        };
+        info!("Nikkei225 has been loaded");
+
+        let config = crate::config::GdriveJson::new()?;
+        let unit = config.jquants_unit();
+        info!("unit: {}", unit);
+
+        let result = nikkei225
+            .into_iter()
+            .filter(|row| {
+                let code = row.get_code();
+                prices_am.get_stock_am(code).is_ok()
+            })
+            .map(|row| {
+                let code = row.get_code();
+                let name = row.get_name();
+                let conn = crate::database::stocks_ohlc::open_db()?;
+                let ohlc_vec = crate::database::stocks_ohlc::select_by_code(&conn, code)?;
+                let ohlc_vec = ohlc_vec
+                    .into_iter()
+                    .map(|ohlc| ohlc.get_inner())
+                    .collect::<Vec<_>>();
+
                 let stock_am = prices_am.get_stock_am(code)?;
                 let stocks_afternoon = match StocksAfternoon::from_vec(
                     &ohlc_vec, stock_am, code, name, unit, &today,

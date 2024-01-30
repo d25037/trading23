@@ -21,5 +21,7 @@ pub enum MyError {
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
+    Rusqlite(#[from] rusqlite::Error),
+    #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 }
