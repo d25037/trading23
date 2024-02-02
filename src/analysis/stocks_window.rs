@@ -18,7 +18,7 @@ use super::live::OhlcPremium;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct StocksWindow {
-    code: i32,
+    code: String,
     name: String,
     atr: f64,
     unit: i32,
@@ -42,7 +42,7 @@ pub struct StocksWindow {
 impl StocksWindow {
     pub fn from_vec(
         ohlc_vec: &Vec<OhlcPremium>,
-        code: i32,
+        code: &str,
         name: &str,
         unit: f64,
         date: &str,
@@ -55,6 +55,8 @@ impl StocksWindow {
         if position < 59 {
             return Err(MyError::OutOfRange);
         }
+
+        let current_price = ohlc_vec[position].get_close();
 
         let ohlc_2 = &ohlc_vec[(position - 1)..=position];
         let ohlc_5 = &ohlc_vec[(position - 4)..=position];
@@ -117,17 +119,11 @@ impl StocksWindow {
 
         let number_of_resistance_candles = ohlc_60
             .iter()
-            .filter(|ohlc| {
-                ohlc.get_high() > highest_high_2
-                    && (highest_high_2 > ohlc.get_low() && ohlc.get_low() > lowest_low_2)
-            })
+            .filter(|ohlc| ohlc.get_high() > highest_high_2 && current_price > ohlc.get_low())
             .count();
         let number_of_support_candles = ohlc_60
             .iter()
-            .filter(|ohlc| {
-                (highest_high_2 > ohlc.get_high() && ohlc.get_high() > lowest_low_2)
-                    && ohlc.get_low() < lowest_low_2
-            })
+            .filter(|ohlc| current_price < ohlc.get_high() && ohlc.get_low() < lowest_low_2)
             .count();
 
         let status = match ohlc_2[1].get_close() - ohlc_2[0].get_open() {
@@ -181,8 +177,6 @@ impl StocksWindow {
             (lower_bound, upper_bound)
         };
 
-        let current_price = ohlc_vec[position].get_close();
-
         let analyzed_at = ohlc_vec[position].get_date().to_owned();
 
         let (nextday_morning_close, result_morning, result_allday, morning_move, result_at) =
@@ -214,7 +208,7 @@ impl StocksWindow {
             };
 
         Ok(Self {
-            code,
+            code: code.to_owned(),
             name: name.to_owned(),
             atr,
             unit,
@@ -382,7 +376,7 @@ impl StocksWindowList {
     pub fn push(
         &mut self,
         ohlc_vec: Vec<OhlcPremium>,
-        code: i32,
+        code: &str,
         name: &str,
         unit: f64,
         from: &str,
@@ -399,7 +393,7 @@ impl StocksWindowList {
                 unit,
                 &date.format("%Y-%m-%d").to_string(),
             ) {
-                Ok(stocks_daytrading) => self.data.push(stocks_daytrading),
+                Ok(stocks_window) => self.data.push(stocks_window),
                 Err(e) => match e {
                     MyError::OutOfRange => {}
                     _ => {
@@ -473,11 +467,15 @@ impl StocksWindowList {
     fn sort_by_number_of_resistance_candles(&mut self) {
         self.data.retain(|x| x.standardized_diff < 0.12);
         self.data.sort_by(|a, b| {
-            let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
-            let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
-            b_number_of_candles
-                .partial_cmp(&a_number_of_candles)
-                .unwrap()
+            // let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
+            let a_max_of_candles = a
+                .number_of_resistance_candles
+                .max(a.number_of_support_candles);
+            // let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
+            let b_max_of_candles = b
+                .number_of_resistance_candles
+                .max(b.number_of_support_candles);
+            b_max_of_candles.partial_cmp(&a_max_of_candles).unwrap()
         })
     }
 
@@ -822,6 +820,7 @@ impl StocksWindowList {
             let (markdown, analyzed_at) =
                 resistance_list.output_for_markdown_resistance_default()?;
             let path = crate::my_file_io::get_jquants_path(JquantsStyle::Resistance, &analyzed_at)?;
+            info!("{}", path.display());
             markdown.write_to_file(&path)?;
         }
 
@@ -829,78 +828,79 @@ impl StocksWindowList {
     }
 }
 
-pub async fn create_stocks_window_list(from: &str, to: &str) -> Result<StocksWindowList, MyError> {
-    async fn inner(
-        row: Nikkei225,
-        unit: f64,
-        from: String,
-        to: String,
-    ) -> Result<StocksWindowList, MyError> {
-        let code = row.get_code();
-        let name = row.get_name();
-        let ohlc_vec_path = match get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) })
-        {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{}", e);
-                return Err(e);
-            }
-        };
-        let ohlc_vec: Vec<OhlcPremium> =
-            match serde_json::from_str(&std::fs::read_to_string(ohlc_vec_path).unwrap()) {
-                Ok(res) => res,
-                Err(e) => {
-                    error!("{}", e);
-                    return Err(MyError::Anyhow(anyhow!("{}", e)));
-                }
-            };
-        let mut stocks_window_list = StocksWindowList::new();
-        stocks_window_list.push(ohlc_vec, code, name, unit, &from, &to);
+// pub async fn create_stocks_window_list(from: &str, to: &str) -> Result<StocksWindowList, MyError> {
+//     async fn inner(
+//         row: Nikkei225,
+//         unit: f64,
+//         from: String,
+//         to: String,
+//     ) -> Result<StocksWindowList, MyError> {
+//         let code = row.get_code();
+//         let name = row.get_name();
+//         let ohlc_vec_path = match get_fetched_ohlc_file_path(AssetType::Stocks {
+//             code: Some(code.to_owned()),
+//         }) {
+//             Ok(res) => res,
+//             Err(e) => {
+//                 error!("{}", e);
+//                 return Err(e);
+//             }
+//         };
+//         let ohlc_vec: Vec<OhlcPremium> =
+//             match serde_json::from_str(&std::fs::read_to_string(ohlc_vec_path).unwrap()) {
+//                 Ok(res) => res,
+//                 Err(e) => {
+//                     error!("{}", e);
+//                     return Err(MyError::Anyhow(anyhow!("{}", e)));
+//                 }
+//             };
+//         let mut stocks_window_list = StocksWindowList::new();
+//         stocks_window_list.push(ohlc_vec, code, name, unit, &from, &to);
 
-        Ok(stocks_window_list)
-    }
+//         Ok(stocks_window_list)
+//     }
 
-    let nikkei225 = match load_nikkei225_list() {
-        Ok(res) => res,
-        Err(e) => {
-            error!("{}", e);
-            return Err(e);
-        }
-    };
-    info!("Nikkei225 has been loaded");
+//     let nikkei225 = match load_nikkei225_list() {
+//         Ok(res) => res,
+//         Err(e) => {
+//             error!("{}", e);
+//             return Err(e);
+//         }
+//     };
+//     info!("Nikkei225 has been loaded");
 
-    let config = crate::config::GdriveJson::new()?;
-    let unit = config.jquants_unit();
-    info!("unit: {}", unit);
+//     let config = crate::config::GdriveJson::new()?;
+//     let unit = config.jquants_unit();
+//     info!("unit: {}", unit);
 
-    let start_time = Instant::now();
+//     let start_time = Instant::now();
 
-    let handles = nikkei225
-        .into_iter()
-        .map(|row| tokio::spawn(inner(row, unit, from.to_owned(), to.to_owned())))
-        .collect::<Vec<_>>();
+//     let handles = nikkei225
+//         .into_iter()
+//         .map(|row| tokio::spawn(inner(row, unit, from.to_owned(), to.to_owned())))
+//         .collect::<Vec<_>>();
 
-    let results = futures::future::join_all(handles).await;
+//     let results = futures::future::join_all(handles).await;
 
-    let mut stocks_daytrading_list = StocksWindowList::new();
-    for result in results {
-        match result {
-            Ok(res) => {
-                let stock = res.unwrap();
-                stocks_daytrading_list.append(stock);
-            }
-            Err(e) => {
-                error!("{}", e);
-                return Err(MyError::Anyhow(anyhow!("{}", e)));
-            }
-        }
-    }
+//     let mut stocks_daytrading_list = StocksWindowList::new();
+//     for result in results {
+//         match result {
+//             Ok(res) => {
+//                 let stock = res.unwrap();
+//                 stocks_daytrading_list.append(stock);
+//             }
+//             Err(e) => {
+//                 error!("{}", e);
+//                 return Err(MyError::Anyhow(anyhow!("{}", e)));
+//             }
+//         }
+//     }
 
-    let end_time = Instant::now();
+//     let end_time = Instant::now();
 
-    info!("Elapsed time: {:?}", end_time - start_time);
-    Ok(stocks_daytrading_list)
-}
+//     info!("Elapsed time: {:?}", end_time - start_time);
+//     Ok(stocks_daytrading_list)
+// }
 
 pub async fn create_stocks_window_list_db(
     from: &str,
@@ -917,12 +917,19 @@ pub async fn create_stocks_window_list_db(
         let conn = crate::database::stocks_ohlc::open_db()?;
 
         let records = crate::database::stocks_ohlc::select_by_code(&conn, code)?;
-        let ohlc_vec: Vec<OhlcPremium> = records
+        let mut ohlc_vec: Vec<OhlcPremium> = records
             .into_iter()
             .map(|x| x.get_inner())
             .collect::<Vec<_>>();
+        ohlc_vec.sort_by(|a, b| {
+            let date_a = NaiveDate::parse_from_str(a.get_date(), "%Y-%m-%d").unwrap();
+            let date_b = NaiveDate::parse_from_str(b.get_date(), "%Y-%m-%d").unwrap();
+            date_a.partial_cmp(&date_b).unwrap()
+        });
+        // debug!("{:?}", ohlc_vec);
         let mut stocks_window_list = StocksWindowList::new();
         stocks_window_list.push(ohlc_vec, code, name, unit, &from, &to);
+        // debug!("{:?}", ohlc_vec);
 
         Ok(stocks_window_list)
     }
@@ -962,10 +969,8 @@ pub async fn create_stocks_window_list_db(
             }
         }
     }
-
-    let end_time = Instant::now();
-
-    info!("Elapsed time: {:?}", end_time - start_time);
+    info!("Elapsed time: {:?}", start_time.elapsed());
+    debug!("{:?}", stocks_daytrading_list);
     Ok(stocks_daytrading_list)
 }
 

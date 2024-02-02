@@ -1,21 +1,21 @@
 use crate::my_error::MyError;
 use anyhow::{anyhow, Result};
 use chrono::Datelike;
-use log::{debug, info};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Nikkei225 {
-    code: i32,
+    code: String,
     name: String,
     category: String,
 }
 
 impl Nikkei225 {
     //getter
-    pub fn get_code(&self) -> i32 {
-        self.code
+    pub fn get_code(&self) -> &str {
+        &self.code
     }
     pub fn get_name(&self) -> &str {
         &self.name
@@ -43,7 +43,7 @@ pub fn load_nikkei225_list() -> Result<Vec<Nikkei225>, MyError> {
 }
 
 pub enum AssetType {
-    Stocks { code: Option<i32> },
+    Stocks { code: Option<String> },
     Fx { symbol: Option<String> },
 }
 
@@ -128,7 +128,7 @@ pub fn get_jquants_path(jquants_style: JquantsStyle, file_name: &str) -> Result<
             Ok(path)
         }
         Err(_) => {
-            info!("{}", file_name);
+            debug!("{}", file_name);
             Ok(backtest_json_parent_dir_path.join(file_name))
         }
     }

@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 
 use crate::jquants::fetcher::{PricesAm, PricesAmInner};
@@ -12,7 +12,7 @@ use std::fmt::Write;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct StocksAfternoon {
-    code: i32,
+    code: String,
     name: String,
     atr: f64,
     unit: i32,
@@ -32,23 +32,25 @@ impl StocksAfternoon {
     pub fn from_vec(
         ohlc_vec: &Vec<OhlcPremium>,
         prices_am: PricesAmInner,
-        code: i32,
+        code: &str,
         name: &str,
         unit: f64,
         date: &str,
     ) -> Result<Self, MyError> {
         let position = match ohlc_vec[ohlc_vec.len() - 1].get_date() {
-            x if x == date => ohlc_vec.len() - 1,
-            _ => ohlc_vec.len() - 2,
+            x if x == date => ohlc_vec.len() - 2,
+            _ => ohlc_vec.len() - 1,
         };
 
         if position < 60 {
             return Err(MyError::OutOfRange);
         }
 
-        let ohlc_5 = &ohlc_vec[(position - 5)..position];
-        let ohlc_20 = &ohlc_vec[(position - 20)..position];
-        let ohlc_60 = &ohlc_vec[(position - 60)..position];
+        let ohlc_5 = &ohlc_vec[(position - 4)..=position];
+        let ohlc_20 = &ohlc_vec[(position - 19)..=position];
+        let ohlc_60 = &ohlc_vec[(position - 59)..=position];
+
+        let (morning_open, morning_close) = (prices_am.get_open(), prices_am.get_close());
 
         let (prev_19, last) = ohlc_20.split_at(19);
         let last_close = last[0].get_close();
@@ -97,17 +99,11 @@ impl StocksAfternoon {
 
         let number_of_resistance_candles = ohlc_60
             .iter()
-            .filter(|ohlc| {
-                ohlc.get_high() > highest_high_2
-                    && (highest_high_2 > ohlc.get_low() && ohlc.get_low() > lowest_low_2)
-            })
+            .filter(|ohlc| ohlc.get_high() > highest_high_2 && morning_close > ohlc.get_low())
             .count();
         let number_of_support_candles = ohlc_60
             .iter()
-            .filter(|ohlc| {
-                (highest_high_2 > ohlc.get_high() && ohlc.get_high() > lowest_low_2)
-                    && ohlc.get_low() < lowest_low_2
-            })
+            .filter(|ohlc| morning_close < ohlc.get_high() && ohlc.get_low() < lowest_low_2)
             .count();
 
         let status = match prices_am.get_close() - ohlc_5[4].get_open() {
@@ -130,13 +126,11 @@ impl StocksAfternoon {
 
         let yesterday_close = ohlc_vec[position - 1].get_close();
 
-        let (morning_open, morning_close) = (prices_am.get_open(), prices_am.get_close());
-
         let latest_move = (morning_close - last_close) / (prev_19_high - prev_19_low);
         let latest_move = (latest_move * 100.0).round() / 100.0;
 
         Ok(Self {
-            code,
+            code: code.to_owned(),
             name: name.to_owned(),
             atr,
             unit,
@@ -212,64 +206,64 @@ impl StocksAfternoonList {
     //     self.data.append(&mut stocks_daytrading_list.data);
     // }
 
-    pub fn from_nikkei225(prices_am: &PricesAm) -> Result<Self, MyError> {
-        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    // pub fn from_nikkei225(prices_am: &PricesAm) -> Result<Self, MyError> {
+    //     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-        let nikkei225 = match load_nikkei225_list() {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{}", e);
-                return Err(e);
-            }
-        };
-        info!("Nikkei225 has been loaded");
+    //     let nikkei225 = match load_nikkei225_list() {
+    //         Ok(res) => res,
+    //         Err(e) => {
+    //             error!("{}", e);
+    //             return Err(e);
+    //         }
+    //     };
+    //     info!("Nikkei225 has been loaded");
 
-        let config = crate::config::GdriveJson::new()?;
-        let unit = config.jquants_unit();
-        info!("unit: {}", unit);
+    //     let config = crate::config::GdriveJson::new()?;
+    //     let unit = config.jquants_unit();
+    //     info!("unit: {}", unit);
 
-        let result = nikkei225
-            .into_iter()
-            .filter(|row| {
-                let code = row.get_code();
-                prices_am.get_stock_am(code).is_ok()
-            })
-            .map(|row| {
-                let code = row.get_code();
-                let name = row.get_name();
-                let ohlc_vec_path =
-                    match get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) }) {
-                        Ok(res) => res,
-                        Err(e) => {
-                            error!("{}", e);
-                            return Err(e);
-                        }
-                    };
-                let ohlc_vec: Vec<OhlcPremium> =
-                    match serde_json::from_str(&std::fs::read_to_string(ohlc_vec_path).unwrap()) {
-                        Ok(res) => res,
-                        Err(e) => {
-                            error!("{}", e);
-                            return Err(MyError::Anyhow(anyhow!("{}", e)));
-                        }
-                    };
-                let stock_am = prices_am.get_stock_am(code)?;
-                let stocks_afternoon = match StocksAfternoon::from_vec(
-                    &ohlc_vec, stock_am, code, name, unit, &today,
-                ) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        error!("{}", e);
-                        return Err(e);
-                    }
-                };
-                Ok(stocks_afternoon)
-            })
-            .collect::<Result<Vec<StocksAfternoon>, MyError>>()
-            .map(Self::from_vec);
+    //     let result = nikkei225
+    //         .into_iter()
+    //         .filter(|row| {
+    //             let code = row.get_code();
+    //             prices_am.get_stock_am(code).is_ok()
+    //         })
+    //         .map(|row| {
+    //             let code = row.get_code();
+    //             let name = row.get_name();
+    //             let ohlc_vec_path =
+    //                 match get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) }) {
+    //                     Ok(res) => res,
+    //                     Err(e) => {
+    //                         error!("{}", e);
+    //                         return Err(e);
+    //                     }
+    //                 };
+    //             let ohlc_vec: Vec<OhlcPremium> =
+    //                 match serde_json::from_str(&std::fs::read_to_string(ohlc_vec_path).unwrap()) {
+    //                     Ok(res) => res,
+    //                     Err(e) => {
+    //                         error!("{}", e);
+    //                         return Err(MyError::Anyhow(anyhow!("{}", e)));
+    //                     }
+    //                 };
+    //             let stock_am = prices_am.get_stock_am(code)?;
+    //             let stocks_afternoon = match StocksAfternoon::from_vec(
+    //                 &ohlc_vec, stock_am, code, name, unit, &today,
+    //             ) {
+    //                 Ok(res) => res,
+    //                 Err(e) => {
+    //                     error!("{}", e);
+    //                     return Err(e);
+    //                 }
+    //             };
+    //             Ok(stocks_afternoon)
+    //         })
+    //         .collect::<Result<Vec<StocksAfternoon>, MyError>>()
+    //         .map(Self::from_vec);
 
-        result
-    }
+    //     result
+    // }
 
     pub fn from_nikkei225_db(prices_am: &PricesAm) -> Result<Self, MyError> {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -298,21 +292,26 @@ impl StocksAfternoonList {
                 let name = row.get_name();
                 let conn = crate::database::stocks_ohlc::open_db()?;
                 let ohlc_vec = crate::database::stocks_ohlc::select_by_code(&conn, code)?;
-                let ohlc_vec = ohlc_vec
+                let mut ohlc_vec = ohlc_vec
                     .into_iter()
                     .map(|ohlc| ohlc.get_inner())
                     .collect::<Vec<_>>();
+                ohlc_vec.reverse();
+                // debug!("{:?}", ohlc_vec);
 
                 let stock_am = prices_am.get_stock_am(code)?;
-                let stocks_afternoon = match StocksAfternoon::from_vec(
-                    &ohlc_vec, stock_am, code, name, unit, &today,
-                ) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        error!("{}", e);
-                        return Err(e);
-                    }
-                };
+                // let stocks_afternoon = match StocksAfternoon::from_vec(
+                //     &ohlc_vec, stock_am, code, name, unit, &today,
+                // ) {
+                //     Ok(res) => res,
+                //     Err(e) => {
+                //         error!("{}", e);
+                //         return Err(e);
+                //     }
+                // };
+                let stocks_afternoon =
+                    StocksAfternoon::from_vec(&ohlc_vec, stock_am, code, name, unit, &today)
+                        .unwrap();
                 Ok(stocks_afternoon)
             })
             .collect::<Result<Vec<StocksAfternoon>, MyError>>()
@@ -333,11 +332,15 @@ impl StocksAfternoonList {
     fn sort_by_number_of_resistance_candles(&mut self) {
         self.data.retain(|x| x.standardized_diff < 0.12);
         self.data.sort_by(|a, b| {
-            let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
-            let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
-            b_number_of_candles
-                .partial_cmp(&a_number_of_candles)
-                .unwrap()
+            // let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
+            let a_max_candles = a
+                .number_of_resistance_candles
+                .max(a.number_of_support_candles);
+            // let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
+            let b_max_candles = b
+                .number_of_resistance_candles
+                .max(b.number_of_support_candles);
+            b_max_candles.partial_cmp(&a_max_candles).unwrap()
         })
     }
 

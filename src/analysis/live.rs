@@ -47,7 +47,7 @@ impl Ohlc {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct OhlcPremium {
-    code: i32,
+    code: String,
     date: String,
     open: f64,
     high: f64,
@@ -59,7 +59,7 @@ pub struct OhlcPremium {
 
 impl OhlcPremium {
     pub fn new(
-        code: i32,
+        code: String,
         date: String,
         open: f64,
         high: f64,
@@ -80,9 +80,12 @@ impl OhlcPremium {
         }
     }
 
-    //getters
-    pub fn get_code(&self) -> i32 {
-        self.code
+    // getters
+    pub fn get_code(&self) -> String {
+        match self.code.chars().count() > 4 {
+            true => self.code.chars().take(4).collect::<String>(),
+            false => self.code.clone(),
+        }
     }
     pub fn get_date(&self) -> &str {
         self.date.as_str()

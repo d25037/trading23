@@ -3,6 +3,7 @@ use crate::config::GdriveJson;
 use crate::my_error::MyError;
 use crate::my_file_io::{get_fetched_ohlc_file_path, AssetType};
 use anyhow::{anyhow, Result};
+use chrono::Timelike;
 use log::error;
 use log::{debug, info};
 use reqwest::{Client, StatusCode};
@@ -213,21 +214,36 @@ pub struct TradingCalender {
 }
 
 impl TradingCalender {
-    pub async fn new(client: &Client, from: Option<&str>) -> Result<Self, MyError> {
+    async fn fetch(client: &Client, from: Option<&str>, to: Option<&str>) -> Result<Self, MyError> {
         let config = crate::config::GdriveJson::new()?;
         let url = "https://api.jquants.com/v1/markets/trading_calendar";
-        let today = {
-            let now = chrono::Local::now();
-            now.format("%Y-%m-%d").to_string()
+
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+        let query = match (from, to) {
+            (Some(from), Some(to)) => {
+                info!("Fetch Calender, from: {}, to: {}", from, to);
+                json!({"from": from, "to": to})
+            }
+            (Some(from), None) => {
+                info!("Fetch Calender, from: {}", from);
+                json!({"from": from, "to": today})
+            }
+            (None, Some(to)) => {
+                info!("Fetch Calender, to: {}", to);
+                let day100_before = (chrono::Local::now() - chrono::Duration::days(100))
+                    .format("%Y-%m-%d")
+                    .to_string();
+                json!({"from:": day100_before, "to": to})
+            }
+            (None, None) => {
+                json!({"from": today, "to": today})
+            }
         };
-        let json = match from {
-            Some(from) => json!({"from": from, "to": today}),
-            None => json!({"to": today}),
-        };
-        info!("Fetch Calender");
+
         let res = client
             .get(url)
-            .query(&json)
+            .query(&query)
             .bearer_auth(config.jquants_id_token())
             .send()
             .await?;
@@ -242,7 +258,7 @@ impl TradingCalender {
             StatusCode::OK => {
                 info!("Status code: {}", status);
                 let json = serde_json::from_str::<TradingCalender>(&text)?;
-                info!("{:?}", json);
+                debug!("{:?}", json);
                 Ok(json)
             }
             StatusCode::UNAUTHORIZED => {
@@ -257,17 +273,29 @@ impl TradingCalender {
         }
     }
 
+    pub async fn fetch_default(client: &Client) -> Result<Self, MyError> {
+        let (day100_before, today) = {
+            let today = chrono::Local::now();
+            let day100_before = today - chrono::Duration::days(100);
+            (
+                day100_before.format("%Y-%m-%d").to_string(),
+                today.format("%Y-%m-%d").to_string(),
+            )
+        };
+        Self::fetch(client, Some(&day100_before), Some(&today)).await
+    }
+
+    pub fn is_date_trading_day(&self, date: &str) -> bool {
+        self.trading_calendar
+            .iter()
+            .any(|x| x.date == date && x.holiday_division == "1")
+    }
     pub fn is_today_trading_day(&self) -> bool {
         let today = {
             let now = chrono::Local::now();
             now.format("%Y-%m-%d").to_string()
         };
-        for row in &self.trading_calendar {
-            if row.date == today && row.holiday_division == "1" {
-                return true;
-            }
-        }
-        false
+        self.is_date_trading_day(&today)
     }
 }
 
@@ -331,13 +359,13 @@ impl Topix {
         )
     }
 
-    pub fn save_to_json_file(&self) -> Result<(), MyError> {
-        let path = crate::my_file_io::get_topix_ohlc_file_path()?;
-        let file = File::create(&path)?;
-        serde_json::to_writer(file, &self)?;
-        info!("Topix has been saved, path: {:?}", path);
-        Ok(())
-    }
+    // pub fn save_to_json_file(&self) -> Result<(), MyError> {
+    //     let path = crate::my_file_io::get_topix_ohlc_file_path()?;
+    //     let file = File::create(&path)?;
+    //     serde_json::to_writer(file, &self)?;
+    //     info!("Topix has been saved, path: {:?}", path);
+    //     Ok(())
+    // }
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -374,17 +402,27 @@ impl TopixInner {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct DailyQuotes {
     daily_quotes: Vec<DailyQuotesInner>,
+    pagination_key: Option<String>,
 }
 
 impl DailyQuotes {
-    pub async fn new(client: &Client, code: i32) -> Result<Self, MyError> {
+    async fn fetch(
+        client: &Client,
+        date: Option<&str>,
+        code: Option<&str>,
+    ) -> Result<Self, MyError> {
         let config = crate::config::GdriveJson::new()?;
         let id_token = config.jquants_id_token();
         let url = "https://api.jquants.com/v1/prices/daily_quotes";
 
-        let query = json!({"code": code});
+        let mut query = HashMap::new();
+        if let Some(date) = date {
+            query.insert("date", date);
+        }
+        if let Some(code) = code {
+            query.insert("code", code);
+        }
 
-        info!("Fetch Daily OHLC, code: {}", code);
         let res = client
             .get(url)
             .query(&query)
@@ -402,7 +440,21 @@ impl DailyQuotes {
             StatusCode::OK => {
                 info!("Status code: {}", status);
                 debug!("{}", text);
-                let json = serde_json::from_str::<DailyQuotes>(&text)?;
+                let mut json = serde_json::from_str::<DailyQuotes>(&text)?;
+                if let Some(next_token) = json.pagination_key.clone() {
+                    query.insert("pagination_key", &next_token);
+                    let res2 = client
+                        .get(url)
+                        .query(&query)
+                        .bearer_auth(id_token)
+                        .send()
+                        .await?;
+
+                    let json2 = serde_json::from_str::<DailyQuotes>(&res2.text().await?)?;
+
+                    json.push(json2);
+                    return Ok(json);
+                }
                 Ok(json)
             }
             StatusCode::UNAUTHORIZED => {
@@ -417,31 +469,17 @@ impl DailyQuotes {
         }
     }
 
-    // pub fn get_ohlc(self) -> Vec<Ohlc> {
-    //     let mut ohlc_vec = Vec::new();
-    //     for jquants_ohlc in self.daily_quotes {
-    //         if jquants_ohlc.open.is_none()
-    //             || jquants_ohlc.high.is_none()
-    //             || jquants_ohlc.low.is_none()
-    //             || jquants_ohlc.close.is_none()
-    //         {
-    //             continue;
-    //         }
-    //         let jquants_ohlc = Ohlc::new(
-    //             jquants_ohlc.date,
-    //             jquants_ohlc.open.expect("Expected open to be Some"),
-    //             jquants_ohlc.high.expect("Expected high to be Some"),
-    //             jquants_ohlc.low.expect("Expected low to be Some"),
-    //             jquants_ohlc.close.expect("Expected close to be Some"),
-    //         );
-    //         ohlc_vec.push(jquants_ohlc);
-    //     }
-    //     ohlc_vec
-    // }
+    pub async fn fetch_by_date(client: &Client, date: &str) -> Result<Self, MyError> {
+        Self::fetch(client, Some(date), None).await
+    }
 
-    pub fn get_ohlc_premium(self) -> Vec<OhlcPremium> {
+    pub async fn fetch_by_code(client: &Client, code: &str) -> Result<Self, MyError> {
+        Self::fetch(client, None, Some(code)).await
+    }
+
+    pub fn get_ohlc_premium(&self) -> Vec<OhlcPremium> {
         let mut ohlc_vec = Vec::new();
-        for jquants_ohlc in self.daily_quotes {
+        for jquants_ohlc in &self.daily_quotes {
             if jquants_ohlc.open.is_none()
                 || jquants_ohlc.high.is_none()
                 || jquants_ohlc.low.is_none()
@@ -452,8 +490,8 @@ impl DailyQuotes {
                 continue;
             }
             let jquants_ohlc = OhlcPremium::new(
-                jquants_ohlc.get_code(),
-                jquants_ohlc.date,
+                jquants_ohlc.get_code().to_owned(),
+                jquants_ohlc.date.clone(),
                 jquants_ohlc.open.expect("Expected open to be Some"),
                 jquants_ohlc.high.expect("Expected high to be Some"),
                 jquants_ohlc.low.expect("Expected low to be Some"),
@@ -468,6 +506,10 @@ impl DailyQuotes {
             ohlc_vec.push(jquants_ohlc);
         }
         ohlc_vec
+    }
+
+    fn push(&mut self, daily_quotes: DailyQuotes) {
+        self.daily_quotes.extend(daily_quotes.daily_quotes);
     }
 }
 
@@ -511,13 +553,16 @@ struct DailyQuotesInner {
     afternoon_open: Option<f64>,
 }
 impl DailyQuotesInner {
-    pub fn get_code(&self) -> i32 {
-        self.code.parse::<i32>().expect("Expected code to be i32")
+    pub fn get_code(&self) -> String {
+        match self.code.chars().count() > 4 {
+            true => self.code.chars().take(4).collect::<String>(),
+            false => self.code.clone(),
+        }
     }
 }
 
-pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingCalender, MyError> {
-    match TradingCalender::new(client, from).await {
+pub async fn first_fetch(client: &Client) -> Result<TradingCalender, MyError> {
+    match TradingCalender::fetch_default(client).await {
         Ok(res) => return Ok(res),
         Err(MyError::IdTokenExpired(_)) => {
             info!("ID token expired, attempting to fetch a new one...")
@@ -526,7 +571,7 @@ pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingC
     };
 
     match IdToken::fetch_and_save_to_file(client).await {
-        Ok(_) => return TradingCalender::new(client, from).await,
+        Ok(_) => return TradingCalender::fetch_default(client).await,
         Err(MyError::RefreshTokenExpired) => {
             info!("Refresh token expired, attempting to fetch a new one...")
         }
@@ -547,7 +592,7 @@ pub async fn first_fetch(client: &Client, from: Option<&str>) -> Result<TradingC
         Err(e) => return Err(e),
     }
 
-    TradingCalender::new(client, from).await
+    TradingCalender::fetch_default(client).await
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -558,9 +603,8 @@ pub struct PricesAm {
 impl PricesAm {
     pub async fn new(client: &Client, force: bool) -> Result<Self, MyError> {
         info!("Starting Fetch Morning Market OHLC");
-        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-        let first_fetched = first_fetch(client, Some(&today)).await?;
+        let first_fetched = first_fetch(client).await?;
         match (first_fetched.is_today_trading_day(), force) {
             (true, _) => info!("Today is Trading Day"),
             (false, true) => info!("Today is Holiday, but force is true"),
@@ -599,7 +643,7 @@ impl PricesAm {
         }
     }
 
-    pub fn get_stock_am(&self, code: i32) -> Result<PricesAmInner, MyError> {
+    pub fn get_stock_am(&self, code: &str) -> Result<PricesAmInner, MyError> {
         let code = {
             let str = code.to_string();
             str + "0"
@@ -651,14 +695,64 @@ impl PricesAmInner {
     }
 }
 
-pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
-    let client = Client::new();
+// pub async fn fetch_nikkei225(client: &Client, force: bool) -> Result<(), MyError> {
+//     info!("Starting First Fetch");
 
+//     let first_fetched = first_fetch(client).await?;
+//     match (first_fetched.is_today_trading_day(), force) {
+//         (true, _) => info!("Today is Trading Day"),
+//         (false, true) => info!("Today is Holiday, but force is true"),
+//         (false, false) => {
+//             error!("Today is Holiday");
+//             return Err(MyError::Holiday);
+//         }
+//     };
+
+//     let topix = Topix::new(client).await?;
+//     topix.save_to_json_file()?;
+
+//     let nikkei225 = crate::my_file_io::load_nikkei225_list()?;
+//     info!("Nikkei225 list has been loaded");
+
+//     let config = crate::config::GdriveJson::new()?;
+//     let unit = config.jquants_unit();
+//     info!("unit: {}", unit);
+
+//     info!("Starting Fetch Nikkei225");
+
+//     for row in nikkei225 {
+//         thread::sleep(Duration::from_secs(1));
+
+//         let code = row.get_code();
+
+//         let daily_quotes: DailyQuotes = DailyQuotes::fetch_by_code(client, code).await?;
+
+//         let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
+//         let now = chrono::Local::now().format("%Y-%m-%d").to_string();
+//         let last_date = raw_ohlc
+//             .last()
+//             .expect("Expected raw_ohlc to be Some")
+//             .get_date()
+//             .to_string();
+//         if now != last_date && !force {
+//             error!("Not Latest Data");
+//             return Err(MyError::NotLatestData);
+//         }
+
+//         let raw_ohlc_serialized = serde_json::to_string(&raw_ohlc)?;
+//         let path = get_fetched_ohlc_file_path(AssetType::Stocks {
+//             code: Some(code.to_owned()),
+//         })?;
+//         std::fs::write(path, raw_ohlc_serialized)?;
+//     }
+//     Ok(())
+// }
+
+pub async fn fetch_nikkei225_db(client: &Client, force: bool) -> Result<(), MyError> {
     info!("Starting First Fetch");
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-    let first_fetched = first_fetch(&client, Some(&today)).await?;
-    match (first_fetched.is_today_trading_day(), force) {
+    let trading_calender = first_fetch(client).await?;
+    match (trading_calender.is_today_trading_day(), force) {
         (true, _) => info!("Today is Trading Day"),
         (false, true) => info!("Today is Holiday, but force is true"),
         (false, false) => {
@@ -666,63 +760,6 @@ pub async fn fetch_nikkei225(force: bool) -> Result<(), MyError> {
             return Err(MyError::Holiday);
         }
     };
-
-    let topix = Topix::new(&client).await?;
-    topix.save_to_json_file()?;
-
-    let nikkei225 = crate::my_file_io::load_nikkei225_list()?;
-    info!("Nikkei225 list has been loaded");
-
-    let config = crate::config::GdriveJson::new()?;
-    let unit = config.jquants_unit();
-    info!("unit: {}", unit);
-
-    info!("Starting Fetch Nikkei225");
-
-    for row in nikkei225 {
-        thread::sleep(Duration::from_secs(1));
-
-        let code = row.get_code();
-
-        let daily_quotes: DailyQuotes = DailyQuotes::new(&client, code).await?;
-
-        let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
-        let now = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let last_date = raw_ohlc
-            .last()
-            .expect("Expected raw_ohlc to be Some")
-            .get_date()
-            .to_string();
-        if now != last_date && !force {
-            error!("Not Latest Data");
-            return Err(MyError::NotLatestData);
-        }
-
-        let raw_ohlc_serialized = serde_json::to_string(&raw_ohlc)?;
-        let path = get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) })?;
-        std::fs::write(path, raw_ohlc_serialized)?;
-    }
-    Ok(())
-}
-
-pub async fn fetch_nikkei225_db(force: bool) -> Result<(), MyError> {
-    let client = Client::new();
-
-    info!("Starting First Fetch");
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-
-    let first_fetched = first_fetch(&client, Some(&today)).await?;
-    match (first_fetched.is_today_trading_day(), force) {
-        (true, _) => info!("Today is Trading Day"),
-        (false, true) => info!("Today is Holiday, but force is true"),
-        (false, false) => {
-            error!("Today is Holiday");
-            return Err(MyError::Holiday);
-        }
-    };
-
-    let topix = Topix::new(&client).await?;
-    topix.save_to_json_file()?;
 
     let nikkei225 = crate::my_file_io::load_nikkei225_list()?;
     info!("Nikkei225 list has been loaded");
@@ -735,35 +772,54 @@ pub async fn fetch_nikkei225_db(force: bool) -> Result<(), MyError> {
 
     let conn = crate::database::stocks_ohlc::open_db()?;
 
-    for row in nikkei225 {
+    let now = chrono::Local::now();
+    let i_from = match now.hour() {
+        0..=15 => 1,
+        _ => 0,
+    };
+
+    for i in i_from..100 {
+        let date = (now - chrono::Duration::days(i))
+            .format("%Y-%m-%d")
+            .to_string();
+
+        match trading_calender.is_date_trading_day(&date) {
+            true => info!("{} is Trading Day", date),
+            false => {
+                info!("{} is Holiday", date);
+                continue;
+            }
+        }
+
+        let records = crate::database::stocks_ohlc::select_by_date(&conn, &date)?;
+        if !records.is_empty() {
+            info!("Already fetched, date: {}", date);
+            break;
+        }
+
         thread::sleep(Duration::from_secs(1));
-
-        let code = row.get_code();
-
-        let record = crate::database::stocks_ohlc::select_by_code_and_date(&conn, code, &today)?;
-        if !record.is_empty() {
-            info!("Already fetched, code: {}", code);
+        let daily_quotes: DailyQuotes = DailyQuotes::fetch_by_date(client, &date).await?;
+        if daily_quotes.daily_quotes.is_empty() {
+            info!("No data, date: {}", date);
             continue;
         }
-        crate::database::stocks_ohlc::delete_by_code(&conn, code)?;
 
-        let daily_quotes: DailyQuotes = DailyQuotes::new(&client, code).await?;
-
-        let raw_ohlc: Vec<OhlcPremium> = daily_quotes.get_ohlc_premium();
-        // let now = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let last_date = raw_ohlc
-            .last()
-            .expect("Expected raw_ohlc to be Some")
-            .get_date()
-            .to_string();
-        if today != last_date && !force {
-            error!("Not Latest Data");
-            return Err(MyError::NotLatestData);
-        }
-        for ohlc in raw_ohlc {
-            crate::database::stocks_ohlc::insert(&conn, &ohlc)?;
-        }
+        nikkei225.iter().for_each(|row| {
+            let code = row.get_code();
+            let ohlc = daily_quotes
+                .get_ohlc_premium()
+                .iter()
+                .find(|x| x.get_code() == *code)
+                .expect("Expected ohlc to be Some")
+                .to_owned();
+            if let Err(e) = crate::database::stocks_ohlc::insert(&conn, &ohlc) {
+                error!("{}", e);
+            };
+        });
+        info!("{} has been fetched", date);
     }
+    info!("Nikkei225 has been fetched");
+
     Ok(())
 }
 

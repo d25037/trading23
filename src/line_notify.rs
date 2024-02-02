@@ -22,6 +22,7 @@ pub async fn send_message(client: &Client, message: &str) -> Result<(), MyError>
 
     match res {
         Ok(res) => {
+            info!("{}", message);
             info!("Line Notify, Status: {}", res.status());
         }
         Err(e) => {

@@ -15,7 +15,7 @@ use super::backtesting_topix::TopixDailyWindowList;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct StocksDaytrading {
-    code: i32,
+    code: String,
     name: String,
     status: Status,
     atr: f64,
@@ -31,7 +31,7 @@ pub struct StocksDaytrading {
 impl StocksDaytrading {
     pub fn from_vec(
         ohlc_vec: &Vec<OhlcPremium>,
-        code: i32,
+        code: &str,
         name: &str,
         unit: f64,
         date: &str,
@@ -150,7 +150,7 @@ impl StocksDaytrading {
         };
 
         Ok(Self {
-            code,
+            code: code.to_owned(),
             name: name.to_owned(),
             status,
             atr,
@@ -216,7 +216,7 @@ impl StocksDaytradingList {
     pub fn push_2(
         &mut self,
         ohlc_vec: Vec<OhlcPremium>,
-        code: i32,
+        code: &str,
         name: &str,
         unit: f64,
         from: &str,
@@ -1036,8 +1036,9 @@ pub async fn async_exec(from: &str, to: &str) -> Result<StocksDaytradingList, My
     ) -> Result<StocksDaytradingList, MyError> {
         let code = row.get_code();
         let name = row.get_name();
-        let ohlc_vec_path = match get_fetched_ohlc_file_path(AssetType::Stocks { code: Some(code) })
-        {
+        let ohlc_vec_path = match get_fetched_ohlc_file_path(AssetType::Stocks {
+            code: Some(code.to_owned()),
+        }) {
             Ok(res) => res,
             Err(e) => {
                 error!("{}", e);

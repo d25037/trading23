@@ -1,7 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 use database::stocks::SelectDate;
 use log::{error, info};
-use my_error::MyError;
 use reqwest::Client;
 use std::env;
 
@@ -59,7 +58,7 @@ struct MyArgs {
 #[tokio::main]
 async fn main() {
     // 環境変数の読み込み
-    env::set_var("RUST_LOG", "info");
+    env::set_var("RUST_LOG", "debug");
     env_logger::init();
 
     let cli = Cli::parse();
@@ -69,29 +68,15 @@ async fn main() {
     match &cli.command {
         Commands::Stocks(args) => {
             if args.nextday {
-                info!("Starting Next day process");
-
                 line_notify::send_message(&client, "Starting Next day process")
                     .await
                     .unwrap();
 
-                // match jquants::fetcher::fetch_nikkei225(args.force).await {
-                //     Ok(_) => {
-                //         info!("fetch_nikkei225 success");
-                //     }
-                //     Err(e) => match e {
-                //         MyError::NotLatestData => return error!("{}", e),
-                //         _ => return error!("fetch_nikkei225 failed: {}", e),
-                //     },
-                // };
-                match jquants::fetcher::fetch_nikkei225_db(args.force).await {
+                match jquants::fetcher::fetch_nikkei225_db(&client, args.force).await {
                     Ok(_) => {
                         info!("fetch_nikkei225 success");
                     }
-                    Err(e) => match e {
-                        MyError::NotLatestData => return error!("{}", e),
-                        _ => return error!("fetch_nikkei225 failed: {}", e),
-                    },
+                    Err(e) => return error!("fetch_nikkei225 failed: {}", e),
                 };
 
                 let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -101,19 +86,6 @@ async fn main() {
                     .format("%Y-%m-%d")
                     .to_string();
 
-                // let stocks_window_list =
-                //     match analysis::stocks_window::create_stocks_window_list(&day_before_5, &today)
-                //         .await
-                //     {
-                //         Ok(output) => output,
-                //         Err(e) => {
-                //             error!("create_stocks_window_list failed: {}", e);
-                //             line_notify::send_message(&client, "create_stocks_window_list failed")
-                //                 .await
-                //                 .unwrap();
-                //             return;
-                //         }
-                //     };
                 let stocks_window_list =
                     match analysis::stocks_window::create_stocks_window_list_db(
                         &day_before_5,
@@ -148,8 +120,6 @@ async fn main() {
             }
 
             if args.afternoon {
-                info!("Starting Afternoon process");
-
                 line_notify::send_message(&client, "Starting Afternoon process")
                     .await
                     .unwrap();
@@ -165,22 +135,6 @@ async fn main() {
                         return;
                     }
                 };
-                // let stocks_afternoon_list =
-                //     match analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(
-                //         &prices_am,
-                //     ) {
-                //         Ok(output) => output,
-                //         Err(e) => {
-                //             error!("StocksAfternoonList::from_nikkei225 failed: {}", e);
-                //             line_notify::send_message(
-                //                 &client,
-                //                 "StocksAfternoonList::from_nikkei225 failed",
-                //             )
-                //             .await
-                //             .unwrap();
-                //             return;
-                //         }
-                //     };
 
                 let stocks_afternoon_list =
                     match analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225_db(
@@ -256,6 +210,12 @@ async fn main() {
                 //     Ok(_) => info!("fetch_nikkei225 success"),
                 //     Err(e) => return error!("fetch_nikkei225 failed: {}", e),
                 // };
+
+                let force = args.force;
+                match jquants::fetcher::fetch_nikkei225_db(&client, force).await {
+                    Ok(_) => info!("fetch_nikkei225 success"),
+                    Err(e) => return error!("fetch_nikkei225 failed: {}", e),
+                }
 
                 // let from = "2023-12-01";
                 // let today = chrono::Local::now().format("%Y-%m-%d").to_string();
