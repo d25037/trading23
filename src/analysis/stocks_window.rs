@@ -32,6 +32,7 @@ pub struct StocksWindow {
     number_of_support_candles: usize,
     status: String,
     result_morning: Option<f64>,
+    result_afternoon: Option<f64>,
     result_allday: Option<f64>,
     nextday_morning_close: Option<f64>,
     morning_move: Option<f64>,
@@ -179,33 +180,52 @@ impl StocksWindow {
 
         let analyzed_at = ohlc_vec[position].get_date().to_owned();
 
-        let (nextday_morning_close, result_morning, result_allday, morning_move, result_at) =
-            match ohlc_vec.len() > position + 1 {
-                true => {
-                    let nextday_morning_close = ohlc_vec[position + 1].get_morning_close();
-                    let result_morning = (ohlc_vec[position + 1].get_morning_close()
+        let (
+            nextday_morning_close,
+            result_morning,
+            result_afternoon,
+            result_allday,
+            morning_move,
+            result_at,
+        ) = match ohlc_vec.len() > position + 1 {
+            true => {
+                let nextday_morning_close = ohlc_vec[position + 1].get_morning_close();
+                let result_morning = {
+                    let price = (ohlc_vec[position + 1].get_morning_close()
                         - ohlc_vec[position + 1].get_open())
                         / atr;
-                    let result_morning = (result_morning * 100.0).round() / 100.0;
-                    let result_allday = (ohlc_vec[position + 1].get_close()
+                    (price * 100.0).round() / 100.0
+                };
+                let result_afternoon = {
+                    let price = (ohlc_vec[position + 1].get_close()
+                        - ohlc_vec[position + 1].get_afternoon_open())
+                        / atr;
+                    (price * 100.0).round() / 100.0
+                };
+                let result_allday = {
+                    let price = (ohlc_vec[position + 1].get_close()
                         - ohlc_vec[position + 1].get_open())
                         / atr;
-                    let result_allday = (result_allday * 100.0).round() / 100.0;
-                    let morning_move = (ohlc_vec[position + 1].get_morning_close()
+                    (price * 100.0).round() / 100.0
+                };
+                let morning_move = {
+                    let price = (ohlc_vec[position + 1].get_morning_close()
                         - ohlc_vec[position].get_close())
                         / (prev_19_high - prev_19_low);
-                    let morning_move = (morning_move * 100.0).round() / 100.0;
-                    let result_at = ohlc_vec[position + 1].get_date().to_owned();
-                    (
-                        Some(nextday_morning_close),
-                        Some(result_morning),
-                        Some(result_allday),
-                        Some(morning_move),
-                        Some(result_at),
-                    )
-                }
-                false => (None, None, None, None, None),
-            };
+                    (price * 100.0).round() / 100.0
+                };
+                let result_at = ohlc_vec[position + 1].get_date().to_owned();
+                (
+                    Some(nextday_morning_close),
+                    Some(result_morning),
+                    Some(result_afternoon),
+                    Some(result_allday),
+                    Some(morning_move),
+                    Some(result_at),
+                )
+            }
+            false => (None, None, None, None, None, None),
+        };
 
         Ok(Self {
             code: code.to_owned(),
@@ -222,6 +242,7 @@ impl StocksWindow {
             number_of_support_candles,
             status: status.to_owned(),
             result_morning,
+            result_afternoon,
             result_allday,
             nextday_morning_close,
             morning_move,
@@ -344,8 +365,9 @@ impl StocksWindow {
         if self.result_allday.is_some() {
             writeln!(
                 buffer,
-                "Morning: {}, Allday: {}",
+                "Morning: {}, Afternoon: {}, Allday: {}",
                 self.result_morning.unwrap(),
+                self.result_afternoon.unwrap(),
                 self.result_allday.unwrap()
             )?;
         }
@@ -464,31 +486,66 @@ impl StocksWindowList {
     //     self.sort_by_difference(true)
     // }
 
-    fn sort_by_number_of_resistance_candles(&mut self) {
-        self.data.retain(|x| x.standardized_diff < 0.12);
-        self.data.sort_by(|a, b| {
-            // let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
-            let a_max_of_candles = a
-                .number_of_resistance_candles
-                .max(a.number_of_support_candles);
-            // let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
-            let b_max_of_candles = b
-                .number_of_resistance_candles
-                .max(b.number_of_support_candles);
-            b_max_of_candles.partial_cmp(&a_max_of_candles).unwrap()
-        })
+    fn filter_by_standardized_diff(&mut self, diff: f64) {
+        self.data.retain(|x| x.standardized_diff < diff);
     }
 
-    fn get_resistance_candles_20(&self) -> StocksWindowList {
-        let mut resistance_candles_20 = StocksWindowList::from(self.data.to_vec());
-        resistance_candles_20.sort_by_number_of_resistance_candles();
-        resistance_candles_20
-            .data
-            .into_iter()
-            .take(20)
-            .collect::<Vec<_>>()
-            .into()
+    fn get_resistance_candles_top10(&self) -> StocksWindowList {
+        let mut resistance_candles_top10 = StocksWindowList::from(self.data.to_vec());
+        resistance_candles_top10.data.sort_by(|a, b| {
+            b.number_of_resistance_candles
+                .partial_cmp(&a.number_of_resistance_candles)
+                .unwrap()
+        });
+        StocksWindowList::from(
+            resistance_candles_top10
+                .data
+                .into_iter()
+                .take(10)
+                .collect::<Vec<_>>(),
+        )
     }
+    fn get_support_candles_top10(&self) -> StocksWindowList {
+        let mut support_candles_top10 = StocksWindowList::from(self.data.to_vec());
+        support_candles_top10.data.sort_by(|a, b| {
+            b.number_of_support_candles
+                .partial_cmp(&a.number_of_support_candles)
+                .unwrap()
+        });
+        StocksWindowList::from(
+            support_candles_top10
+                .data
+                .into_iter()
+                .take(10)
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    // fn sort_by_number_of_resistance_candles(&mut self) {
+    //     self.data.retain(|x| x.standardized_diff < 0.12);
+    //     self.data.sort_by(|a, b| {
+    //         // let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
+    //         let a_max_of_candles = a
+    //             .number_of_resistance_candles
+    //             .max(a.number_of_support_candles);
+    //         // let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
+    //         let b_max_of_candles = b
+    //             .number_of_resistance_candles
+    //             .max(b.number_of_support_candles);
+    //         b_max_of_candles.partial_cmp(&a_max_of_candles).unwrap()
+    //     })
+    // }
+
+    // fn get_resistance_candles_20(&self) -> StocksWindowList {
+    //     let mut resistance_candles_20 = StocksWindowList::from(self.data.to_vec());
+    //     resistance_candles_20.sort_by_number_of_resistance_candles();
+    //     resistance_candles_20
+    //         .data
+    //         .into_iter()
+    //         .take(20)
+    //         .collect::<Vec<_>>()
+    //         .into()
+    // }
 
     // fn get_morning_mover(&self) -> Option<StocksWindowList> {
     //     self.data[0].result_morning_close?;
@@ -653,7 +710,37 @@ impl StocksWindowList {
     //     self.output_for_markdown_cloud(false)
     // }
 
-    pub fn output_for_markdown_resistance(
+    // pub fn output_for_markdown_resistance(
+    //     &self,
+    //     afternoon: bool,
+    // ) -> Result<(Markdown, String), MyError> {
+    //     let (date, title) = match afternoon {
+    //         true => (self.data[0].result_at.clone().unwrap(), "This afternoon"),
+    //         false => (self.data[0].analyzed_at.clone(), "Nextday"),
+    //     };
+
+    //     let mut markdown = Markdown::new();
+    //     markdown.h1(&date)?;
+    //     markdown.h2(title)?;
+
+    //     for stocks_window in &self.data {
+    //         match afternoon {
+    //             true => markdown.body(&stocks_window.markdown_body_output_for_resistance(true)?)?,
+    //             false => {
+    //                 markdown.body(&stocks_window.markdown_body_output_for_resistance_default()?)?
+    //             }
+    //         }
+    //     }
+
+    //     debug!("{}", markdown.buffer());
+
+    //     Ok((markdown, date))
+    // }
+    // pub fn output_for_markdown_resistance_default(&self) -> Result<(Markdown, String), MyError> {
+    //     self.output_for_markdown_resistance(false)
+    // }
+
+    fn output_for_markdown_resistance_support(
         &self,
         afternoon: bool,
     ) -> Result<(Markdown, String), MyError> {
@@ -662,15 +749,30 @@ impl StocksWindowList {
             false => (self.data[0].analyzed_at.clone(), "Nextday"),
         };
 
+        let resistance = self.get_resistance_candles_top10();
+        let support = self.get_support_candles_top10();
+
         let mut markdown = Markdown::new();
         markdown.h1(&date)?;
         markdown.h2(title)?;
+        markdown.h3("Resistance Candles Top 10")?;
 
-        for stocks_window in &self.data {
+        for resistance_row in resistance.data {
             match afternoon {
-                true => markdown.body(&stocks_window.markdown_body_output_for_resistance(true)?)?,
+                true => {
+                    markdown.body(&resistance_row.markdown_body_output_for_resistance(true)?)?
+                }
                 false => {
-                    markdown.body(&stocks_window.markdown_body_output_for_resistance_default()?)?
+                    markdown.body(&resistance_row.markdown_body_output_for_resistance_default()?)?
+                }
+            }
+        }
+        markdown.h3("Support Candles Top 10")?;
+        for support_row in support.data {
+            match afternoon {
+                true => markdown.body(&support_row.markdown_body_output_for_resistance(true)?)?,
+                false => {
+                    markdown.body(&support_row.markdown_body_output_for_resistance_default()?)?
                 }
             }
         }
@@ -678,9 +780,6 @@ impl StocksWindowList {
         debug!("{}", markdown.buffer());
 
         Ok((markdown, date))
-    }
-    pub fn output_for_markdown_resistance_default(&self) -> Result<(Markdown, String), MyError> {
-        self.output_for_markdown_resistance(false)
     }
 
     // fn mean_long_rows_someday(&self, row: usize) -> (f64, f64) {
@@ -814,14 +913,16 @@ impl StocksWindowList {
         }
 
         for (_, stocks_window_list) in date_to_stocks {
-            let stocks_window_list = StocksWindowList::from(stocks_window_list);
-            let resistance_list = stocks_window_list.get_resistance_candles_20();
+            let mut stocks_window_list = StocksWindowList::from(stocks_window_list);
+            stocks_window_list.filter_by_standardized_diff(0.12);
+            // let resistance_list = stocks_window_list.get_resistance_candles_20();
 
             let (markdown, analyzed_at) =
-                resistance_list.output_for_markdown_resistance_default()?;
+                stocks_window_list.output_for_markdown_resistance_support(false)?;
+            // resistance_list.output_for_markdown_resistance_default()?;
             let path = crate::my_file_io::get_jquants_path(JquantsStyle::Resistance, &analyzed_at)?;
             info!("{}", path.display());
-            markdown.write_to_file(&path)?;
+            markdown.write_to_html(&path)?;
         }
 
         Ok(())

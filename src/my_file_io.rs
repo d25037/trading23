@@ -28,10 +28,7 @@ pub fn load_nikkei225_list() -> Result<Vec<Nikkei225>, MyError> {
         .join("trading23")
         .join("nikkei225_lists")
         .join("20231002.csv");
-    let mut rdr = match csv::Reader::from_path(nikkei225_path) {
-        Ok(rdr) => rdr,
-        Err(e) => return Err(MyError::Anyhow(anyhow!(e.to_string()))),
-    };
+    let mut rdr = csv::Reader::from_path(nikkei225_path)?;
     let mut nikkei225_vec = Vec::new();
     for result in rdr.deserialize() {
         let nikkei225 = result.map_err(|e| MyError::Anyhow(anyhow!(e.to_string())))?;

@@ -752,14 +752,14 @@ pub async fn fetch_nikkei225_db(client: &Client, force: bool) -> Result<(), MyEr
     info!("Starting First Fetch");
 
     let trading_calender = first_fetch(client).await?;
-    match (trading_calender.is_today_trading_day(), force) {
-        (true, _) => info!("Today is Trading Day"),
-        (false, true) => info!("Today is Holiday, but force is true"),
-        (false, false) => {
-            error!("Today is Holiday");
-            return Err(MyError::Holiday);
-        }
-    };
+    // match (trading_calender.is_today_trading_day(), force) {
+    //     (true, _) => info!("Today is Trading Day"),
+    //     (false, true) => info!("Today is Holiday, but force is true"),
+    //     (false, false) => {
+    //         error!("Today is Holiday");
+    //         return Err(MyError::Holiday);
+    //     }
+    // };
 
     let nikkei225 = crate::my_file_io::load_nikkei225_list()?;
     info!("Nikkei225 list has been loaded");

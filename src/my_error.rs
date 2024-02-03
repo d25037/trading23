@@ -23,5 +23,7 @@ pub enum MyError {
     #[error(transparent)]
     Rusqlite(#[from] rusqlite::Error),
     #[error(transparent)]
+    Csv(#[from] csv::Error),
+    #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 }

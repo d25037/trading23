@@ -58,7 +58,7 @@ struct MyArgs {
 #[tokio::main]
 async fn main() {
     // 環境変数の読み込み
-    env::set_var("RUST_LOG", "debug");
+    env::set_var("RUST_LOG", "info");
     env_logger::init();
 
     let cli = Cli::parse();

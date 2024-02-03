@@ -26,3 +26,4 @@ ring = "0.17.7"
 hex = "0.4.3"
 polars = { version = "0.35.4", features = ["lazy"] }
 statrs = "0.16"
+pulldown-cmark = "0.9.6"

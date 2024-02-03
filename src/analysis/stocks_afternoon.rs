@@ -268,13 +268,7 @@ impl StocksAfternoonList {
     pub fn from_nikkei225_db(prices_am: &PricesAm) -> Result<Self, MyError> {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-        let nikkei225 = match load_nikkei225_list() {
-            Ok(res) => res,
-            Err(e) => {
-                error!("{}", e);
-                return Err(e);
-            }
-        };
+        let nikkei225 = load_nikkei225_list()?;
         info!("Nikkei225 has been loaded");
 
         let config = crate::config::GdriveJson::new()?;
@@ -288,9 +282,9 @@ impl StocksAfternoonList {
                 prices_am.get_stock_am(code).is_ok()
             })
             .map(|row| {
-                let code = row.get_code();
-                let name = row.get_name();
+                let (code, name) = (row.get_code(), row.get_name());
                 let conn = crate::database::stocks_ohlc::open_db()?;
+
                 let ohlc_vec = crate::database::stocks_ohlc::select_by_code(&conn, code)?;
                 let mut ohlc_vec = ohlc_vec
                     .into_iter()
@@ -300,18 +294,8 @@ impl StocksAfternoonList {
                 // debug!("{:?}", ohlc_vec);
 
                 let stock_am = prices_am.get_stock_am(code)?;
-                // let stocks_afternoon = match StocksAfternoon::from_vec(
-                //     &ohlc_vec, stock_am, code, name, unit, &today,
-                // ) {
-                //     Ok(res) => res,
-                //     Err(e) => {
-                //         error!("{}", e);
-                //         return Err(e);
-                //     }
-                // };
                 let stocks_afternoon =
-                    StocksAfternoon::from_vec(&ohlc_vec, stock_am, code, name, unit, &today)
-                        .unwrap();
+                    StocksAfternoon::from_vec(&ohlc_vec, stock_am, code, name, unit, &today)?;
                 Ok(stocks_afternoon)
             })
             .collect::<Result<Vec<StocksAfternoon>, MyError>>()
@@ -329,31 +313,66 @@ impl StocksAfternoonList {
     //     });
     // }
 
-    fn sort_by_number_of_resistance_candles(&mut self) {
-        self.data.retain(|x| x.standardized_diff < 0.12);
-        self.data.sort_by(|a, b| {
-            // let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
-            let a_max_candles = a
-                .number_of_resistance_candles
-                .max(a.number_of_support_candles);
-            // let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
-            let b_max_candles = b
-                .number_of_resistance_candles
-                .max(b.number_of_support_candles);
-            b_max_candles.partial_cmp(&a_max_candles).unwrap()
-        })
+    fn filter_by_standardized_diff(&mut self, diff: f64) {
+        self.data.retain(|x| x.standardized_diff < diff);
     }
 
-    fn get_resistance_candles_20(&self) -> StocksAfternoonList {
-        let mut resistance_candles_20 = StocksAfternoonList::from(self.data.to_vec());
-        resistance_candles_20.sort_by_number_of_resistance_candles();
-        resistance_candles_20
-            .data
-            .into_iter()
-            .take(20)
-            .collect::<Vec<_>>()
-            .into()
+    fn get_resistance_candles_top10(&self) -> StocksAfternoonList {
+        let mut resistance_candles_top10 = StocksAfternoonList::from(self.data.to_vec());
+        resistance_candles_top10.data.sort_by(|a, b| {
+            b.number_of_resistance_candles
+                .partial_cmp(&a.number_of_resistance_candles)
+                .unwrap()
+        });
+        StocksAfternoonList::from(
+            resistance_candles_top10
+                .data
+                .into_iter()
+                .take(10)
+                .collect::<Vec<_>>(),
+        )
     }
+    fn get_support_candles_top10(&self) -> StocksAfternoonList {
+        let mut support_candles_top10 = StocksAfternoonList::from(self.data.to_vec());
+        support_candles_top10.data.sort_by(|a, b| {
+            b.number_of_support_candles
+                .partial_cmp(&a.number_of_support_candles)
+                .unwrap()
+        });
+        StocksAfternoonList::from(
+            support_candles_top10
+                .data
+                .into_iter()
+                .take(10)
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    // fn sort_by_number_of_resistance_candles(&mut self) {
+    //     self.data.retain(|x| x.standardized_diff < 0.12);
+    //     self.data.sort_by(|a, b| {
+    //         // let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
+    //         let a_max_candles = a
+    //             .number_of_resistance_candles
+    //             .max(a.number_of_support_candles);
+    //         // let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
+    //         let b_max_candles = b
+    //             .number_of_resistance_candles
+    //             .max(b.number_of_support_candles);
+    //         b_max_candles.partial_cmp(&a_max_candles).unwrap()
+    //     })
+    // }
+
+    // fn get_resistance_candles_20(&self) -> StocksAfternoonList {
+    //     let mut resistance_candles_20 = StocksAfternoonList::from(self.data.to_vec());
+    //     resistance_candles_20.sort_by_number_of_resistance_candles();
+    //     resistance_candles_20
+    //         .data
+    //         .into_iter()
+    //         .take(20)
+    //         .collect::<Vec<_>>()
+    //         .into()
+    // }
 
     // fn get_on_the_cloud(&self) -> StocksAfternoonList {
     //     let on_the_cloud = self
@@ -395,11 +414,33 @@ impl StocksAfternoonList {
     //     StocksAfternoonList::from_vec(under_the_cloud.into_iter().cloned().collect())
     // }
 
-    pub fn output_for_markdown_afternoon(&self, date: &str) -> Result<Markdown, MyError> {
+    fn output_for_markdown_afternoon(&self, date: &str) -> Result<Markdown, MyError> {
         let mut markdown = Markdown::new();
         markdown.h1(date)?;
 
         for stocks_afternoon in &self.data {
+            markdown.body(&stocks_afternoon.markdown_body_output()?)?;
+        }
+
+        info!("{}", markdown.buffer());
+
+        Ok(markdown)
+    }
+
+    fn output_for_markdown_afternoon_2(&self, date: &str) -> Result<Markdown, MyError> {
+        let mut markdown = Markdown::new();
+        markdown.h1(date)?;
+        markdown.h2("Afternoon Strategy")?;
+
+        let resistance_candles_top10 = self.get_resistance_candles_top10();
+        markdown.h3("Resistance Candles Top 10")?;
+        for stocks_afternoon in &resistance_candles_top10.data {
+            markdown.body(&stocks_afternoon.markdown_body_output()?)?;
+        }
+
+        let support_candles_top10 = self.get_support_candles_top10();
+        markdown.h3("Support Candles Top 10")?;
+        for stocks_afternoon in &support_candles_top10.data {
             markdown.body(&stocks_afternoon.markdown_body_output()?)?;
         }
 
@@ -422,13 +463,13 @@ impl StocksAfternoonList {
     //     Ok(())
     // }
 
-    pub fn for_resistance_strategy(self) -> Result<(), MyError> {
+    pub fn for_resistance_strategy(mut self) -> Result<(), MyError> {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let afternoon_list = self.get_resistance_candles_20();
+        self.filter_by_standardized_diff(0.12);
 
-        let markdown = afternoon_list.output_for_markdown_afternoon(&today)?;
+        let markdown = self.output_for_markdown_afternoon_2(&today)?;
         let path = crate::my_file_io::get_jquants_path(JquantsStyle::Afternoon, &today)?;
-        markdown.write_to_file(&path)?;
+        markdown.write_to_html(&path)?;
 
         Ok(())
     }
