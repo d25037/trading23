@@ -109,22 +109,17 @@ impl StocksWindow {
         let standardized_diff =
             (average_diff / (highest_high - lowest_low) * 1000.0).trunc() / 1000.0;
 
-        let highest_high_2 = ohlc_2
-            .iter()
-            .map(|ohlc| ohlc.get_high())
-            .fold(f64::NAN, f64::max);
-        let lowest_low_2 = ohlc_2
-            .iter()
-            .map(|ohlc| ohlc.get_low())
-            .fold(f64::NAN, f64::min);
-
         let number_of_resistance_candles = ohlc_60
             .iter()
-            .filter(|ohlc| ohlc.get_high() > highest_high_2 && current_price > ohlc.get_low())
+            .filter(|ohlc| {
+                ohlc.get_high() > ohlc_vec[position].get_high() && current_price > ohlc.get_low()
+            })
             .count();
         let number_of_support_candles = ohlc_60
             .iter()
-            .filter(|ohlc| current_price < ohlc.get_high() && ohlc.get_low() < lowest_low_2)
+            .filter(|ohlc| {
+                ohlc.get_high() > current_price && ohlc_vec[position].get_low() > ohlc.get_low()
+            })
             .count();
 
         let status = match ohlc_2[1].get_close() - ohlc_2[0].get_open() {

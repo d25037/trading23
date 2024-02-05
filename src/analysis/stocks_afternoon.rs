@@ -94,16 +94,13 @@ impl StocksAfternoon {
         let standardized_diff =
             (average_diff / (highest_high - lowest_low) * 1000.0).trunc() / 1000.0;
 
-        let highest_high_2 = ohlc_5[4].get_high().max(prices_am.get_high());
-        let lowest_low_2 = ohlc_5[4].get_low().min(prices_am.get_low());
-
         let number_of_resistance_candles = ohlc_60
             .iter()
-            .filter(|ohlc| ohlc.get_high() > highest_high_2 && morning_close > ohlc.get_low())
+            .filter(|ohlc| ohlc.get_high() > prices_am.get_high() && morning_close > ohlc.get_low())
             .count();
         let number_of_support_candles = ohlc_60
             .iter()
-            .filter(|ohlc| morning_close < ohlc.get_high() && ohlc.get_low() < lowest_low_2)
+            .filter(|ohlc| ohlc.get_high() > morning_close && prices_am.get_low() > ohlc.get_low())
             .count();
 
         let status = match prices_am.get_close() - ohlc_5[4].get_open() {
