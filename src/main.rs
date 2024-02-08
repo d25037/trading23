@@ -88,7 +88,7 @@ async fn main() {
 
                 let stocks_window_list =
                     match analysis::stocks_window::create_stocks_window_list_db(
-                        &day_before_5,
+                        "2023-12-01",
                         &today,
                     )
                     .await

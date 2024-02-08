@@ -357,6 +357,13 @@ impl StocksWindow {
             self.atr, self.unit, latest_move, self.required_amount
         )?;
 
+        writeln!(
+            buffer,
+            "Buy: {}, Sell: {}",
+            ((current_price + self.atr * 0.03) * 10.0).round() / 10.0,
+            ((current_price - self.atr * 0.03) * 10.0).round() / 10.0
+        )?;
+
         if self.result_allday.is_some() {
             writeln!(
                 buffer,

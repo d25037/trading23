@@ -176,6 +176,13 @@ impl StocksAfternoon {
         )
         .unwrap();
 
+        writeln!(
+            buffer,
+            "Buy: {}, Sell: {}",
+            ((self.morning_close + self.atr * 0.03) * 10.0).round() / 10.0,
+            ((self.morning_close - self.atr * 0.03) * 10.0).round() / 10.0
+        )?;
+
         writeln!(buffer, "Morning Result: {}", morning_result)?;
 
         Ok(buffer)
