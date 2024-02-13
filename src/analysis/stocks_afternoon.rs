@@ -178,9 +178,8 @@ impl StocksAfternoon {
 
         writeln!(
             buffer,
-            "Buy: {}, Sell: {}",
-            ((self.morning_close + self.atr * 0.03) * 10.0).round() / 10.0,
-            ((self.morning_close - self.atr * 0.03) * 10.0).round() / 10.0
+            "0.075ATR: {}",
+            (self.atr * 0.075 * 10.0).round() / 10.0
         )?;
 
         writeln!(buffer, "Morning Result: {}", morning_result)?;

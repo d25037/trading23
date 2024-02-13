@@ -32,6 +32,16 @@ impl GdriveJson {
                 .join("trading23")
                 .join("config.json")
         };
+        if !file_path.exists() {
+            std::process::Command::new("sudo")
+                .arg("mount")
+                .arg("-t")
+                .arg("drvfs")
+                .arg("G:")
+                .arg("/mnt/g")
+                .output()?;
+        };
+
         let file = File::open(file_path)?;
 
         let res = serde_json::from_reader(file)?;
