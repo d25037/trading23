@@ -353,14 +353,12 @@ impl StocksWindow {
 
         writeln!(
             buffer,
-            "ATR: {}, Unit: {}, Move: {}, 必要金額: {}円",
-            self.atr, self.unit, latest_move, self.required_amount
-        )?;
-
-        writeln!(
-            buffer,
-            "0.075ATR: {}",
-            (self.atr * 0.075 * 10.0).round() / 10.0
+            "ATR: {}({}), Unit: {}, Move: {}, 必要金額: {}円",
+            self.atr,
+            (self.atr * 0.075 * 10.0).round() / 10.0,
+            self.unit,
+            latest_move,
+            self.required_amount
         )?;
 
         if self.result_allday.is_some() {
