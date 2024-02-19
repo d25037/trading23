@@ -30,7 +30,7 @@ pub struct StocksAfternoon {
 
 impl StocksAfternoon {
     pub fn from_vec(
-        ohlc_vec: &Vec<OhlcPremium>,
+        ohlc_vec: &[OhlcPremium],
         prices_am: PricesAmInner,
         code: &str,
         name: &str,
@@ -53,15 +53,14 @@ impl StocksAfternoon {
         let (morning_open, morning_close) = (prices_am.get_open(), prices_am.get_close());
 
         let (prev_19, last) = ohlc_20.split_at(19);
-        let last_close = last[0].get_close();
-        let prev_19_high = prev_19
-            .iter()
-            .map(|ohlc| ohlc.get_high())
-            .fold(f64::NAN, f64::max);
-        let prev_19_low = prev_19
-            .iter()
-            .map(|ohlc| ohlc.get_low())
-            .fold(f64::NAN, f64::min);
+        // let prev_19_high = prev_19
+        //     .iter()
+        //     .map(|ohlc| ohlc.get_high())
+        //     .fold(f64::NAN, f64::max);
+        // let prev_19_low = prev_19
+        //     .iter()
+        //     .map(|ohlc| ohlc.get_low())
+        //     .fold(f64::NAN, f64::min);
 
         let atr = ohlc_5
             .iter()
@@ -72,7 +71,7 @@ impl StocksAfternoon {
 
         let (unit, required_amount) = {
             let unit = unit / atr;
-            let required_amount = (unit * last_close) as i32;
+            let required_amount = (unit * last[0].get_close()) as i32;
             (unit as i32, required_amount)
         };
 
@@ -123,8 +122,9 @@ impl StocksAfternoon {
 
         let yesterday_close = ohlc_vec[position - 1].get_close();
 
-        let latest_move = (morning_close - last_close) / (prev_19_high - prev_19_low);
+        let latest_move = (morning_close - morning_open) / (last[0].get_high() - last[0].get_low());
         let latest_move = (latest_move * 100.0).round() / 100.0;
+        let latest_move = latest_move.abs();
 
         Ok(Self {
             code: code.to_owned(),
@@ -159,23 +159,22 @@ impl StocksAfternoon {
 
         writeln!(
             buffer,
-            "{} {}, {}円, {} [R: {}, S: {}] D: {}",
+            "{} {}, {}円, {} [R: {}, S: {}] LM: {}",
             self.code,
             name,
             self.morning_close,
             self.status,
             self.number_of_resistance_candles,
             self.number_of_support_candles,
-            self.standardized_diff
+            self.latest_move,
         )?;
 
         writeln!(
             buffer,
-            "ATR: {}({}), Unit: {}, Move: {}, 必要金額: {}円",
+            "ATR: {}({}), Unit: {}, 必要金額: {}円",
             self.atr,
             (self.atr * 0.075 * 10.0).round() / 10.0,
             self.unit,
-            self.latest_move,
             self.required_amount
         )?;
 
