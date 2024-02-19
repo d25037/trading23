@@ -106,11 +106,22 @@ async fn main() {
                         }
                     };
 
-                if let Err(e) = stocks_window_list.for_resistance_strategy() {
+                if let Err(e) = stocks_window_list.for_resistance_strategy_default() {
                     error!("for_resistance_strategy failed: {}", e);
                     line_notify::send_message(&client, "for_resistance_strategy failed")
                         .await
                         .unwrap();
+                    return;
+                };
+
+                if let Err(e) = stocks_window_list.for_resistance_strategy(true) {
+                    error!("for_resistance_consolidating_strategy failed: {}", e);
+                    line_notify::send_message(
+                        &client,
+                        "for_resistance_consolidating_strategy failed",
+                    )
+                    .await
+                    .unwrap();
                     return;
                 };
 
@@ -136,8 +147,8 @@ async fn main() {
                     }
                 };
 
-                let stocks_afternoon_list =
-                    match analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225_db(
+                let mut stocks_afternoon_list =
+                    match analysis::stocks_afternoon::StocksAfternoonList::from_nikkei225(
                         &prices_am,
                     ) {
                         Ok(output) => output,
@@ -153,7 +164,15 @@ async fn main() {
                         }
                     };
 
-                if let Err(e) = stocks_afternoon_list.for_resistance_strategy() {
+                if let Err(e) = stocks_afternoon_list.for_resistance_strategy_default() {
+                    error!("for_afternoon_strategy failed: {}", e);
+                    line_notify::send_message(&client, "for_afternoon_strategy failed")
+                        .await
+                        .unwrap();
+                    return;
+                };
+
+                if let Err(e) = stocks_afternoon_list.for_resistance_strategy(true) {
                     error!("for_afternoon_strategy failed: {}", e);
                     line_notify::send_message(&client, "for_afternoon_strategy failed")
                         .await

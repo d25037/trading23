@@ -492,6 +492,10 @@ impl StocksWindowList {
         self.data.retain(|x| x.standardized_diff < diff);
     }
 
+    fn filter_by_latest_move(&mut self, latest_move: f64) {
+        self.data.retain(|x| x.latest_move < latest_move);
+    }
+
     fn get_resistance_candles_top10(&self) -> StocksWindowList {
         let mut resistance_candles_top10 = StocksWindowList::from(self.data.to_vec());
         resistance_candles_top10.data.sort_by(|a, b| {
@@ -522,225 +526,6 @@ impl StocksWindowList {
                 .collect::<Vec<_>>(),
         )
     }
-
-    // fn sort_by_number_of_resistance_candles(&mut self) {
-    //     self.data.retain(|x| x.standardized_diff < 0.12);
-    //     self.data.sort_by(|a, b| {
-    //         // let a_number_of_candles = a.number_of_resistance_candles + a.number_of_support_candles;
-    //         let a_max_of_candles = a
-    //             .number_of_resistance_candles
-    //             .max(a.number_of_support_candles);
-    //         // let b_number_of_candles = b.number_of_resistance_candles + b.number_of_support_candles;
-    //         let b_max_of_candles = b
-    //             .number_of_resistance_candles
-    //             .max(b.number_of_support_candles);
-    //         b_max_of_candles.partial_cmp(&a_max_of_candles).unwrap()
-    //     })
-    // }
-
-    // fn get_resistance_candles_20(&self) -> StocksWindowList {
-    //     let mut resistance_candles_20 = StocksWindowList::from(self.data.to_vec());
-    //     resistance_candles_20.sort_by_number_of_resistance_candles();
-    //     resistance_candles_20
-    //         .data
-    //         .into_iter()
-    //         .take(20)
-    //         .collect::<Vec<_>>()
-    //         .into()
-    // }
-
-    // fn get_morning_mover(&self) -> Option<StocksWindowList> {
-    //     self.data[0].result_morning_close?;
-
-    //     let mut morning_mover = self.data.clone();
-    //     morning_mover.sort_by(|a, b| {
-    //         b.morning_move
-    //             .unwrap()
-    //             .abs()
-    //             .partial_cmp(&a.morning_move.unwrap().abs())
-    //             .unwrap()
-    //     });
-
-    //     Some(StocksWindowList::from(
-    //         morning_mover.into_iter().take(20).collect::<Vec<_>>(),
-    //     ))
-    // }
-
-    // fn get_on_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-    //     let on_the_cloud = self
-    //         .data
-    //         .iter()
-    //         .filter(|x| {
-    //             let current_price = match afternoon {
-    //                 true => x.nextday_morning_close.unwrap(),
-    //                 false => x.current_price,
-    //             };
-    //             let difference = (current_price - x.upper_bound) / x.atr;
-    //             difference > 0.0 && difference < 0.2 && x.standardized_diff < 0.12
-    //         })
-    //         .collect::<Vec<_>>();
-
-    //     StocksWindowList::from(on_the_cloud.into_iter().cloned().collect::<Vec<_>>())
-    // }
-    // fn get_on_the_cloud_default(&self) -> StocksWindowList {
-    //     self.get_on_the_cloud(false)
-    // }
-
-    // fn get_between_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-    //     let between_the_cloud = self
-    //         .data
-    //         .iter()
-    //         .filter(|x| {
-    //             let current_price = match afternoon {
-    //                 true => x.nextday_morning_close.unwrap(),
-    //                 false => x.current_price,
-    //             };
-    //             current_price > x.lower_bound
-    //                 && current_price < x.upper_bound
-    //                 && x.standardized_diff < 0.12
-    //         })
-    //         .collect::<Vec<_>>();
-
-    //     StocksWindowList::from(between_the_cloud.into_iter().cloned().collect::<Vec<_>>())
-    // }
-    // fn get_between_the_cloud_default(&self) -> StocksWindowList {
-    //     self.get_between_the_cloud(false)
-    // }
-
-    // fn get_under_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-    //     let under_the_cloud = self
-    //         .data
-    //         .iter()
-    //         .filter(|x| {
-    //             let current_price = match afternoon {
-    //                 true => x.nextday_morning_close.unwrap(),
-    //                 false => x.current_price,
-    //             };
-    //             let difference = (current_price - x.lower_bound) / x.atr;
-    //             difference < 0.0 && difference > -0.2 && x.standardized_diff < 0.12
-    //         })
-    //         .collect::<Vec<_>>();
-
-    //     StocksWindowList::from(under_the_cloud.into_iter().cloned().collect::<Vec<_>>())
-    // }
-    // fn get_under_the_cloud_default(&self) -> StocksWindowList {
-    //     self.get_under_the_cloud(false)
-    // }
-
-    // fn get_around_the_cloud(&self, afternoon: bool) -> StocksWindowList {
-    //     let mut around_the_cloud = StocksWindowList::new();
-    //     around_the_cloud.append(self.get_on_the_cloud(afternoon));
-    //     around_the_cloud.append(self.get_between_the_cloud(afternoon));
-    //     around_the_cloud.append(self.get_under_the_cloud(afternoon));
-
-    //     around_the_cloud
-    // }
-    // fn get_around_the_cloud_default(&self) -> StocksWindowList {
-    //     self.get_around_the_cloud(false)
-    // }
-
-    // fn output_for_markdown_window(&self, date: &str) -> Result<Markdown, MyError> {
-    //     let mut markdown = Markdown::new();
-    //     markdown.h1(date)?;
-
-    //     let start_index = 0;
-    //     let end_index = self.data.len().min(10);
-
-    //     markdown.h2("Top 10")?;
-    //     for stocks_window in &self.data[start_index..end_index] {
-    //         markdown.body(&stocks_window.markdown_body_output_default())?;
-    //     }
-
-    //     if self.data.len() > 10 {
-    //         let start_index = self.data.len() - 10;
-    //         let end_index = self.data.len();
-
-    //         markdown.h2("Bottom 10")?;
-    //         for stocks_window in &self.data[start_index..end_index] {
-    //             markdown.body(&stocks_window.markdown_body_output_default())?;
-    //         }
-    //     }
-
-    //     let row = 3;
-    //     let (long_morning_close, long_afternoon_close) = self.mean_long_rows_someday(row);
-    //     markdown.body(&format!(
-    //         "<Long> MC_mean{}: {}, AC_mean{}: {}",
-    //         row, long_morning_close, row, long_afternoon_close
-    //     ))?;
-
-    //     let (short_morning_close, short_afternoon_close) = self.mean_short_rows_someday(row);
-    //     markdown.body(&format!(
-    //         "<Short> MC_mean{}: {}, AC_mean{}: {}",
-    //         row, short_morning_close, row, short_afternoon_close
-    //     ))?;
-
-    //     debug!("{}", markdown.buffer());
-
-    //     Ok(markdown)
-    // }
-
-    // pub fn output_for_markdown_cloud(
-    //     &self,
-    //     afternoon: bool,
-    // ) -> Result<(Markdown, String), MyError> {
-    //     let date = match afternoon {
-    //         true => self.data[0].result_at.clone().unwrap(),
-    //         false => self.data[0].analyzed_at.clone(),
-    //     };
-
-    //     let title = match afternoon {
-    //         true => "This afternoon",
-    //         false => "Nextday",
-    //     };
-
-    //     let mut markdown = Markdown::new();
-    //     markdown.h1(&date)?;
-    //     markdown.h2(title)?;
-
-    //     for stocks_window in &self.data {
-    //         match afternoon {
-    //             true => markdown.body(&stocks_window.markdown_body_output_for_cloud(true)?)?,
-    //             false => markdown.body(&stocks_window.markdown_body_output_for_cloud_default()?)?,
-    //         }
-    //     }
-
-    //     debug!("{}", markdown.buffer());
-
-    //     Ok((markdown, date))
-    // }
-    // pub fn output_for_markdown_cloud_default(&self) -> Result<(Markdown, String), MyError> {
-    //     self.output_for_markdown_cloud(false)
-    // }
-
-    // pub fn output_for_markdown_resistance(
-    //     &self,
-    //     afternoon: bool,
-    // ) -> Result<(Markdown, String), MyError> {
-    //     let (date, title) = match afternoon {
-    //         true => (self.data[0].result_at.clone().unwrap(), "This afternoon"),
-    //         false => (self.data[0].analyzed_at.clone(), "Nextday"),
-    //     };
-
-    //     let mut markdown = Markdown::new();
-    //     markdown.h1(&date)?;
-    //     markdown.h2(title)?;
-
-    //     for stocks_window in &self.data {
-    //         match afternoon {
-    //             true => markdown.body(&stocks_window.markdown_body_output_for_resistance(true)?)?,
-    //             false => {
-    //                 markdown.body(&stocks_window.markdown_body_output_for_resistance_default()?)?
-    //             }
-    //         }
-    //     }
-
-    //     debug!("{}", markdown.buffer());
-
-    //     Ok((markdown, date))
-    // }
-    // pub fn output_for_markdown_resistance_default(&self) -> Result<(Markdown, String), MyError> {
-    //     self.output_for_markdown_resistance(false)
-    // }
 
     fn output_for_markdown_resistance_support(
         &self,
@@ -784,127 +569,7 @@ impl StocksWindowList {
         Ok((markdown, date))
     }
 
-    // fn mean_long_rows_someday(&self, row: usize) -> (f64, f64) {
-    //     let start_index = 0;
-    //     let end_index = self.data.len().min(row);
-
-    //     let mut morning_close_sum = 0.0;
-    //     let mut afternoon_close_sum = 0.0;
-    //     for stocks_window in &self.data[start_index..end_index] {
-    //         morning_close_sum += stocks_window.get_morning_close();
-    //         afternoon_close_sum += stocks_window.get_afternoon_close();
-    //     }
-
-    //     (
-    //         (morning_close_sum / row as f64 * 100.0).round() / 100.0,
-    //         (afternoon_close_sum / row as f64 * 100.0).round() / 100.0,
-    //     )
-    // }
-
-    // fn mean_short_rows_someday(&self, row: usize) -> (f64, f64) {
-    //     let start_index = self.data.len() - row;
-    //     let end_index = self.data.len();
-
-    //     let mut morning_close_sum = 0.0;
-    //     let mut afternoon_close_sum = 0.0;
-    //     for stocks_window in &self.data[start_index..end_index] {
-    //         morning_close_sum += stocks_window.get_morning_close();
-    //         afternoon_close_sum += stocks_window.get_afternoon_close();
-    //     }
-
-    //     (
-    //         (morning_close_sum / row as f64 * 100.0).round() / 100.0,
-    //         (afternoon_close_sum / row as f64 * 100.0).round() / 100.0,
-    //     )
-    // }
-
-    // fn mean_on_the_cloud(&self) -> (f64, f64) {
-    //     let on_the_cloud = self.get_on_the_cloud_default();
-
-    //     let mut morning_close_sum = 0.0;
-    //     let mut afternoon_close_sum = 0.0;
-    //     for stocks_cloud in &on_the_cloud.data {
-    //         morning_close_sum += stocks_cloud.get_morning_close();
-    //         afternoon_close_sum += stocks_cloud.get_afternoon_close();
-    //     }
-
-    //     (
-    //         (morning_close_sum / on_the_cloud.data.len() as f64 * 100.0).round() / 100.0,
-    //         (afternoon_close_sum / on_the_cloud.data.len() as f64 * 100.0).round() / 100.0,
-    //     )
-    // }
-    // fn mean_under_the_cloud(&self) -> (f64, f64) {
-    //     let under_the_cloud = self.get_under_the_cloud_default();
-
-    //     let mut morning_close_sum = 0.0;
-    //     let mut afternoon_close_sum = 0.0;
-    //     for stocks_cloud in &under_the_cloud.data {
-    //         morning_close_sum += stocks_cloud.get_morning_close();
-    //         afternoon_close_sum += stocks_cloud.get_afternoon_close();
-    //     }
-
-    //     (
-    //         (morning_close_sum / under_the_cloud.data.len() as f64 * 100.0).round() / 100.0,
-    //         (afternoon_close_sum / under_the_cloud.data.len() as f64 * 100.0).round() / 100.0,
-    //     )
-    // }
-
-    // pub fn for_window_strategy(&self) -> Result<(), MyError> {
-    //     let mut date_to_stocks: HashMap<_, Vec<_>> = HashMap::new();
-
-    //     for stocks_window in &self.data {
-    //         date_to_stocks
-    //             .entry(stocks_window.analyzed_at.clone())
-    //             .or_default()
-    //             .push(stocks_window.clone());
-    //     }
-
-    //     for (date, stocks_window_list) in date_to_stocks {
-    //         let mut stocks_window_list = StocksWindowList::from(stocks_window_list);
-    //         // stocks_window_list.sort_by_latest_move();
-    //         stocks_window_list.sort_by_difference(false);
-
-    //         let markdown = stocks_window_list.output_for_markdown_window(&date)?;
-    //         let path = crate::my_file_io::get_jquants_path(JquantsStyle::Window, &date)?;
-    //         markdown.write_to_file(&path)?;
-    //     }
-
-    //     Ok(())
-    // }
-
-    // pub fn for_cloud_strategy(&self) -> Result<(), MyError> {
-    //     let mut date_to_stocks: HashMap<_, Vec<_>> = HashMap::new();
-
-    //     for stocks_window in &self.data {
-    //         date_to_stocks
-    //             .entry(stocks_window.analyzed_at.clone())
-    //             .or_default()
-    //             .push(stocks_window.clone());
-    //     }
-
-    //     for (_, stocks_window_list) in date_to_stocks {
-    //         let stocks_window_list = StocksWindowList::from(stocks_window_list);
-    //         let mut around_the_cloud = stocks_window_list.get_around_the_cloud_default();
-    //         around_the_cloud.sort_by_latest_move(true);
-
-    //         let (markdown, analyzed_at) = around_the_cloud.output_for_markdown_cloud_default()?;
-    //         let path = crate::my_file_io::get_jquants_path(JquantsStyle::Cloud, &analyzed_at)?;
-    //         markdown.write_to_file(&path)?;
-
-    //         if stocks_window_list.data[0].nextday_morning_close.is_some() {
-    //             let mut afternoon_list = stocks_window_list.get_around_the_cloud(true);
-    //             afternoon_list.sort_by_morning_move(true);
-    //             let (markdown, result_at) = afternoon_list.output_for_markdown_cloud(true)?;
-    //             let path =
-    //                 crate::my_file_io::get_jquants_path(JquantsStyle::Afternoon, &result_at)?;
-    //             markdown.write_to_file(&path)?;
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
-
-    pub fn for_resistance_strategy(&self) -> Result<(), MyError> {
+    pub fn for_resistance_strategy(&self, consolidating: bool) -> Result<(), MyError> {
         let mut date_to_stocks: HashMap<_, Vec<_>> = HashMap::new();
 
         for stocks_window in &self.data {
@@ -917,93 +582,30 @@ impl StocksWindowList {
         for (_, stocks_window_list) in date_to_stocks {
             let mut stocks_window_list = StocksWindowList::from(stocks_window_list);
             stocks_window_list.filter_by_standardized_diff(0.12);
-            // let resistance_list = stocks_window_list.get_resistance_candles_20();
+            if consolidating {
+                stocks_window_list.filter_by_latest_move(0.25);
+            }
 
             let (markdown, analyzed_at) =
                 stocks_window_list.output_for_markdown_resistance_support(false)?;
-            // resistance_list.output_for_markdown_resistance_default()?;
-            let path = crate::my_file_io::get_jquants_path(JquantsStyle::Resistance, &analyzed_at)?;
+            let path = match consolidating {
+                true => {
+                    crate::my_file_io::get_jquants_path(JquantsStyle::Consolidating, &analyzed_at)?
+                }
+                false => {
+                    crate::my_file_io::get_jquants_path(JquantsStyle::Resistance, &analyzed_at)?
+                }
+            };
             info!("{}", path.display());
             markdown.write_to_html(&path)?;
         }
 
         Ok(())
     }
+    pub fn for_resistance_strategy_default(&self) -> Result<(), MyError> {
+        self.for_resistance_strategy(false)
+    }
 }
-
-// pub async fn create_stocks_window_list(from: &str, to: &str) -> Result<StocksWindowList, MyError> {
-//     async fn inner(
-//         row: Nikkei225,
-//         unit: f64,
-//         from: String,
-//         to: String,
-//     ) -> Result<StocksWindowList, MyError> {
-//         let code = row.get_code();
-//         let name = row.get_name();
-//         let ohlc_vec_path = match get_fetched_ohlc_file_path(AssetType::Stocks {
-//             code: Some(code.to_owned()),
-//         }) {
-//             Ok(res) => res,
-//             Err(e) => {
-//                 error!("{}", e);
-//                 return Err(e);
-//             }
-//         };
-//         let ohlc_vec: Vec<OhlcPremium> =
-//             match serde_json::from_str(&std::fs::read_to_string(ohlc_vec_path).unwrap()) {
-//                 Ok(res) => res,
-//                 Err(e) => {
-//                     error!("{}", e);
-//                     return Err(MyError::Anyhow(anyhow!("{}", e)));
-//                 }
-//             };
-//         let mut stocks_window_list = StocksWindowList::new();
-//         stocks_window_list.push(ohlc_vec, code, name, unit, &from, &to);
-
-//         Ok(stocks_window_list)
-//     }
-
-//     let nikkei225 = match load_nikkei225_list() {
-//         Ok(res) => res,
-//         Err(e) => {
-//             error!("{}", e);
-//             return Err(e);
-//         }
-//     };
-//     info!("Nikkei225 has been loaded");
-
-//     let config = crate::config::GdriveJson::new()?;
-//     let unit = config.jquants_unit();
-//     info!("unit: {}", unit);
-
-//     let start_time = Instant::now();
-
-//     let handles = nikkei225
-//         .into_iter()
-//         .map(|row| tokio::spawn(inner(row, unit, from.to_owned(), to.to_owned())))
-//         .collect::<Vec<_>>();
-
-//     let results = futures::future::join_all(handles).await;
-
-//     let mut stocks_daytrading_list = StocksWindowList::new();
-//     for result in results {
-//         match result {
-//             Ok(res) => {
-//                 let stock = res.unwrap();
-//                 stocks_daytrading_list.append(stock);
-//             }
-//             Err(e) => {
-//                 error!("{}", e);
-//                 return Err(MyError::Anyhow(anyhow!("{}", e)));
-//             }
-//         }
-//     }
-
-//     let end_time = Instant::now();
-
-//     info!("Elapsed time: {:?}", end_time - start_time);
-//     Ok(stocks_daytrading_list)
-// }
 
 pub async fn create_stocks_window_list_db(
     from: &str,
@@ -1076,126 +678,3 @@ pub async fn create_stocks_window_list_db(
     debug!("{:?}", stocks_daytrading_list);
     Ok(stocks_daytrading_list)
 }
-
-// pub fn mean_analysis(stock_window_list: StocksWindowList, from: &str, to: &str) {
-//     let topix_list = crate::analysis::backtesting_topix::TopixDailyWindowList::new(
-//         &crate::analysis::backtesting_topix::BacktestingTopixList::from_json_file().unwrap(),
-//     );
-
-//     let from = NaiveDate::parse_from_str(from, "%Y-%m-%d").unwrap();
-//     let to = NaiveDate::parse_from_str(to, "%Y-%m-%d").unwrap();
-//     let mut date = from;
-//     let mut i_sp = 0.0;
-//     let mut i_mp = 0.0;
-//     let mut i_sn = 0.0;
-//     let mut i_mn = 0.0;
-//     // let mut long_morning_sum = 0.0;
-//     let mut long_afternoon_sum_sp = 0.0;
-//     let mut long_afternoon_sum_mp = 0.0;
-//     let mut long_afternoon_sum_mn = 0.0;
-//     let mut long_afternoon_sum_sn = 0.0;
-//     // let mut short_morning_sum = 0.0;
-//     let mut short_afternoon_sum_sp = 0.0;
-//     let mut short_afternoon_sum_mp = 0.0;
-//     let mut short_afternoon_sum_mn = 0.0;
-//     let mut short_afternoon_sum_sn = 0.0;
-//     while date <= to {
-//         let someday = &date.format("%Y-%m-%d").to_string();
-//         let someday_list = stock_window_list
-//             .clone()
-//             .data
-//             .into_iter()
-//             .filter(|x| x.analyzed_at == *someday)
-//             .collect::<Vec<_>>();
-//         if !someday_list.is_empty() {
-//             let someday_list = StocksWindowList::from(someday_list);
-//             println!("{}", someday);
-
-//             let row = 3;
-//             let (long_morning_close, long_afternoon_close) =
-//                 someday_list.mean_long_rows_someday(row);
-//             let (short_morning_close, short_afternoon_close) =
-//                 someday_list.mean_short_rows_someday(row);
-//             // long_morning_sum += long_morning_close;
-//             // long_afternoon_sum_mp += long_afternoon_close;
-//             // // short_morning_sum += short_morning_close;
-//             // short_afternoon_sum_mp += short_afternoon_close;
-
-//             if topix_list.get_mild_positive().contains(someday) {
-//                 println!("mild_positive");
-//                 long_afternoon_sum_mp += long_morning_close;
-//                 short_afternoon_sum_mp += short_morning_close;
-//                 i_mp += 1.0;
-//             } else if topix_list.get_mild_negative().contains(someday) {
-//                 println!("mild_negative");
-//                 long_afternoon_sum_mn += long_morning_close;
-//                 short_afternoon_sum_mn += short_morning_close;
-//                 i_mn += 1.0;
-//             } else if topix_list.get_strong_positive().contains(someday) {
-//                 println!("strong_positive");
-//                 long_afternoon_sum_sp += long_morning_close;
-//                 short_afternoon_sum_sp += short_morning_close;
-//                 i_sp += 1.0;
-//             } else if topix_list.get_strong_negative().contains(someday) {
-//                 println!("strong_negative");
-//                 long_afternoon_sum_sn += long_morning_close;
-//                 short_afternoon_sum_sn += short_morning_close;
-//                 i_sn += 1.0;
-//             } else {
-//                 println!("no_change");
-//             }
-
-//             // println!(
-//             //     "long_morning_close: {}, long_afternoon_close: {}",
-//             //     long_morning_close, long_afternoon_close
-//             // );
-//             // println!(
-//             //     "short_morning_close: {}, short_afternoon_close: {}",
-//             //     short_morning_close, short_afternoon_close
-//             // );
-//             // i += 1.0;
-//         }
-//         date += Duration::days(1);
-//     }
-
-//     println!(
-//         "long_afternoon_mean_sp: {}",
-//         // (long_morning_sum / i * 100.0).round() / 100.0,
-//         (long_afternoon_sum_sp / i_sp * 100.0).round() / 100.0
-//     );
-//     println!(
-//         "short_afternoon_mean_sp: {}",
-//         // (short_morning_sum / i * 100.0).round() / 100.0,
-//         (short_afternoon_sum_sp / i_sp * 100.0).round() / 100.0
-//     );
-//     println!(
-//         "long_afternoon_mean_mp: {}",
-//         // (long_morning_sum / i * 100.0).round() / 100.0,
-//         (long_afternoon_sum_mp / i_mp * 100.0).round() / 100.0
-//     );
-//     println!(
-//         "short_afternoon_mean_mp: {}",
-//         // (short_morning_sum / i * 100.0).round() / 100.0,
-//         (short_afternoon_sum_mp / i_mp * 100.0).round() / 100.0
-//     );
-//     println!(
-//         "long_afternoon_mean_mn: {}",
-//         // (long_morning_sum / i * 100.0).round() / 100.0,
-//         (long_afternoon_sum_mn / i_mn * 100.0).round() / 100.0
-//     );
-//     println!(
-//         "short_afternoon_mean_mn: {}",
-//         // (short_morning_sum / i * 100.0).round() / 100.0,
-//         (short_afternoon_sum_mn / i_mn * 100.0).round() / 100.0
-//     );
-//     println!(
-//         "long_afternoon_mean_sn: {}",
-//         // (long_morning_sum / i * 100.0).round() / 100.0,
-//         (long_afternoon_sum_sn / i_sn * 100.0).round() / 100.0
-//     );
-//     println!(
-//         "short_afternoon_mean_sn: {}",
-//         // (short_morning_sum / i * 100.0).round() / 100.0,
-//         (short_afternoon_sum_sn / i_sn * 100.0).round() / 100.0
-//     );
-// }
