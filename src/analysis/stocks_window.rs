@@ -357,11 +357,8 @@ impl StocksWindow {
 
         writeln!(
             buffer,
-            "ATR: {}({}), Unit: {}, 必要金額: {}円",
-            self.atr,
-            (self.atr * 0.075 * 10.0).round() / 10.0,
-            self.unit,
-            self.required_amount
+            "ATR: {}, Unit: {}, 必要金額: {}円",
+            self.atr, self.unit, self.required_amount
         )?;
 
         if self.result_allday.is_some() {
@@ -434,60 +431,6 @@ impl StocksWindowList {
         self.data.append(&mut stocks_daytrading_list.data);
     }
 
-    // fn sort_by_latest_move(&mut self, absolute: bool) {
-    //     match absolute {
-    //         true => self.data.sort_by(|a, b| {
-    //             b.latest_move
-    //                 .abs()
-    //                 .partial_cmp(&a.latest_move.abs())
-    //                 .unwrap()
-    //         }),
-    //         false => self
-    //             .data
-    //             .sort_by(|a, b| b.latest_move.partial_cmp(&a.latest_move).unwrap()),
-    //     }
-    // }
-    // fn sort_by_latest_move_default(&mut self) {
-    //     self.sort_by_latest_move(true)
-    // }
-
-    // fn sort_by_morning_move(&mut self, absolute: bool) {
-    //     match absolute {
-    //         true => self.data.sort_by(|a, b| {
-    //             b.morning_move
-    //                 .unwrap()
-    //                 .abs()
-    //                 .partial_cmp(&a.morning_move.unwrap().abs())
-    //                 .unwrap()
-    //         }),
-    //         false => self
-    //             .data
-    //             .sort_by(|a, b| b.morning_move.partial_cmp(&a.morning_move).unwrap()),
-    //     }
-    // }
-    // fn sort_by_morning_move_default(&mut self) {
-    //     self.sort_by_morning_move(true)
-    // }
-
-    // fn sort_by_difference(&mut self, absolute: bool) {
-    //     match absolute {
-    //         true => self.data.sort_by(|a, b| {
-    //             let a_difference = (a.current_price - a.lower_bound) / a.atr;
-    //             let b_difference = (b.current_price - b.lower_bound) / b.atr;
-    //             b_difference.abs().partial_cmp(&a_difference.abs()).unwrap()
-    //         }),
-    //         false => self.data.sort_by(|a, b| {
-    //             let a_difference = (a.current_price - a.lower_bound) / a.atr;
-    //             let b_difference = (b.current_price - b.lower_bound) / b.atr;
-    //             b_difference.partial_cmp(&a_difference).unwrap()
-    //         }),
-    //     }
-    // }
-
-    // fn sort_by_difference_default(&mut self) {
-    //     self.sort_by_difference(true)
-    // }
-
     fn filter_by_standardized_diff(&mut self, diff: f64) {
         self.data.retain(|x| x.standardized_diff < diff);
     }
@@ -527,6 +470,25 @@ impl StocksWindowList {
         )
     }
 
+    fn number_of_morning_gainers(&self) -> f64 {
+        self.data
+            .iter()
+            .filter(|x| x.result_morning.unwrap_or(0.0) > 0.0)
+            .count() as f64
+    }
+    fn number_of_afternoon_gainers(&self) -> f64 {
+        self.data
+            .iter()
+            .filter(|x| x.result_afternoon.unwrap_or(0.0) > 0.0)
+            .count() as f64
+    }
+    fn number_of_allday_gainers(&self) -> f64 {
+        self.data
+            .iter()
+            .filter(|x| x.result_allday.unwrap_or(0.0) > 0.0)
+            .count() as f64
+    }
+
     fn output_for_markdown_resistance_support(
         &self,
         afternoon: bool,
@@ -536,12 +498,30 @@ impl StocksWindowList {
             false => (self.data[0].analyzed_at.clone(), "Nextday"),
         };
 
+        let len = self.data.len() as f64;
+
         let resistance = self.get_resistance_candles_top10();
         let support = self.get_support_candles_top10();
 
         let mut markdown = Markdown::new();
         markdown.h1(&date)?;
         markdown.h2(title)?;
+
+        markdown.h3("Summary")?;
+        markdown.body(&format!("Number of Stocks: {}", len))?;
+        markdown.body(&format!(
+            "Morning Gainers: {}%",
+            (self.number_of_morning_gainers() / len * 100.0).round()
+        ))?;
+        markdown.body(&format!(
+            "Afternoon Gainers: {}%",
+            (self.number_of_afternoon_gainers() / len * 100.0).round()
+        ))?;
+        markdown.body(&format!(
+            "Allday Gainers: {}%",
+            (self.number_of_allday_gainers() / len * 100.0).round()
+        ))?;
+
         markdown.h3("Resistance Candles Top 10")?;
 
         for resistance_row in resistance.data {

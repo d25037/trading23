@@ -171,11 +171,8 @@ impl StocksAfternoon {
 
         writeln!(
             buffer,
-            "ATR: {}({}), Unit: {}, 必要金額: {}円",
-            self.atr,
-            (self.atr * 0.075 * 10.0).round() / 10.0,
-            self.unit,
-            self.required_amount
+            "ATR: {}, Unit: {}, 必要金額: {}円",
+            self.atr, self.unit, self.required_amount
         )?;
 
         writeln!(buffer, "Morning Result: {}", morning_result)?;
